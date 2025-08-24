@@ -1,0 +1,28 @@
+﻿  imgui.cpp
+  imgui_demo.cpp
+  imgui_draw.cpp
+  imgui_impl_dx11.cpp
+  imgui_impl_win32.cpp
+  imgui_tables.cpp
+  imgui_widgets.cpp
+  main.cpp
+C:\Users\skiddlee\source\repos\inverto\inverto\src\modules\esp.hpp(39,12): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'src/main.cpp')
+  
+C:\Users\skiddlee\source\repos\inverto\inverto\src\modules\esp.hpp(40,12): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'src/main.cpp')
+  
+C:\Users\skiddlee\source\repos\inverto\inverto\src\modules\esp.hpp(42,12): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'src/main.cpp')
+  
+C:\Users\skiddlee\source\repos\inverto\inverto\src\modules\esp.hpp(43,12): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+  (compiling source file 'src/main.cpp')
+  
+C:\Users\skiddlee\source\repos\inverto\inverto\src\main.cpp(694,17): warning C4244: '+=': conversion from 'double' to 'float', possible loss of data
+C:\Users\skiddlee\source\repos\inverto\inverto\src\main.cpp(703,16): warning C4244: '-=': conversion from 'double' to 'float', possible loss of data
+  Generating Code...
+  LINK : C:\Users\skiddlee\source\repos\inverto\\build\inverto.exe not found or not built by the last incremental link; performing full link
+LINK : warning LNK4098: defaultlib 'LIBCMT' conflicts with use of other libs; use /NODEFAULTLIB:library
+  inverto.vcxproj -> C:\Users\skiddlee\source\repos\inverto\build\inverto.exe
+  Der Befehl "pwsh.exe" ist entweder falsch geschrieben oder
+  konnte nicht gefunden werden.
