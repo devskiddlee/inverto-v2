@@ -8,6 +8,7 @@ A feature-rich, completely external CS2 cheat written in c++
 - Triggerbot
 - Anti Flashbang
 - Configs
+- Auto Offset Updater
 - & many more
 
 If you want to have a feature added, open an issue
