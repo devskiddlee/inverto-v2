@@ -205,7 +205,7 @@ void jumpShot_tick(float dt)
 
 	if (time_in_air > 100.f && GetAsyncKeyState(G::S.JUMPSHOT_HOTKEY) < 0 && G::S.jumpShotHack && G::weaponName == "weapon_ssg08")
 	{
-		Vector velocity = G::localPlayer.absVeloctiy;
+		Vector velocity = G::localPlayer.absVelocity;
 
 		if (velocity.z < G::S.jumpShotThreshold && velocity.z > -G::S.jumpShotThreshold)
 			G::shoot = true;
@@ -248,6 +248,16 @@ public:
 			flashbang_color_vec.w = get_flashbang_alpha();
 			ImColor flashbang_color = flashbang_color_vec;
 			event.drawList->AddRectFilled(ImVec2(0, 0), G::windowSize.toVec2(), flashbang_color);
+		}
+
+		if (G::S.showVelocity) {
+			Vector velocity = G::localPlayer.absVelocity;
+			velocity.z = 0.f;
+			std::string velocity_str = str((int)velocity.length());
+			float text_width = G::default_font->CalcTextSizeA(30.f, 1000, 1000, velocity_str.c_str()).x;
+			event.drawList->AddText(G::default_font, 30.f, { G::windowSize.x / 2 - text_width / 2, 700 }, ImColor(255, 255, 0), velocity_str.c_str());
+		
+			event.drawList->AddCircle(G::windowCenter.toVec2(), velocity.length(), ImColor(255, 255, 0));
 		}
 	}
 };

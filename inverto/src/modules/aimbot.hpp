@@ -2,12 +2,17 @@
 
 void move_mouse(float x, float y, float speed)
 {
+	if (G::localPlayer.health <= 0)
+		return;
+	if (G::render_ui)
+		return;
+
 	float vel = 0;
 	if (G::entities.size() > 0)
 	{
-		vel = abs(G::nearest_player.absVeloctiy.x) + abs(G::nearest_player.absVeloctiy.y) + abs(G::nearest_player.absVeloctiy.z);
+		vel = G::nearest_player.absVelocity.length();
 	}
-	float ownVel = abs(G::localPlayer.absVeloctiy.x) + abs(G::localPlayer.absVeloctiy.y) + abs(G::localPlayer.absVeloctiy.z);
+	float ownVel = G::localPlayer.absVelocity.length();
 
 	x = x / 360;
 	y = y / 360;
@@ -74,30 +79,52 @@ void calculateRecoilOffset()
 
 float easingFactor = 23.f;
 
+void aim_and_shoot(Entity e, float speed) {
+	calculateRecoilOffset();
+
+	int entityindex = G::memory.Read<int>(G::localPlayer.address + G::offsets.IDEntIndex);
+	Vector angles = CalcAngles(G::localPlayer.head, e.head);
+	if (recoilpoints.size() > 0 && G::S.rcs)
+		aim_at(Vector(angles.x - recoilpoints.back().x / easingFactor, angles.y + recoilpoints.back().y / easingFactor, angles.z), speed);
+	else
+		aim_at(angles, speed);
+
+	if (G::S.triggerbot && entityindex != -1) {
+		if ((G::localPlayer.absVelocity.z > 1 || G::localPlayer.absVelocity.z < -1) && G::S.jumpShotHack && G::weaponName == "weapon_ssg08")
+			return;
+
+		if (G::S.onlyShootWhenStill && G::localPlayer.absVelocity.length() > 50.f)
+			return;
+
+		G::shoot = true;
+	}
+}
+
 class Aimbot {
 public:
 	static void OnTick(TickEvent event) {
+		float speed = G::S.aimbotspeed * event.delta_time * 100 * (90.f / G::fov);
 		if (G::S.aimbot && G::entities.size() > 0) {
 			if (GetAsyncKeyState(G::S.AIMBOT_KEY)) {
-				calculateRecoilOffset();
-				float speed = G::S.aimbotspeed * event.delta_time * 100 * (90.f / G::fov);
-				int entityindex = G::memory.Read<int>(G::localPlayer.address + G::offsets.IDEntIndex);
 				if ((G::nearest_player.angleDiff < G::S.maxAngleDiffAimbot * (90.f / G::fov)) || G::S.disableAngleDiff) {
 					if ((G::nearest_player.visible || G::S.ignoreVisible) && G::time_alive[G::nearest_player.id] > 0.5f) {
-						Vector angles = CalcAngles(G::localPlayer.head, G::nearest_player.head);
-						if (recoilpoints.size() > 0 && G::S.rcs)
-							aim_at(Vector(angles.x - recoilpoints.back().x / easingFactor, angles.y + recoilpoints.back().y / easingFactor, angles.z), speed);
-						else
-							aim_at(angles, speed);
-
-						if (G::S.triggerbot && entityindex != -1) {
-							if ((G::localPlayer.absVeloctiy.z > 1 || G::localPlayer.absVeloctiy.z < -1) && G::weaponName == "weapon_ssg08")
-								return;
-
-							G::shoot = true;
-						}
+						aim_and_shoot(G::nearest_player, speed);
 					}
 				}
+			}
+		}
+		if (G::S.autoAimWhenVisible && G::entities.size() > 0) {
+			Entity to_aim_at;
+			bool v = false;
+			for (Entity& e : G::entities) {
+				if (e.visible) {
+					to_aim_at = e;
+					v = true;
+					break;
+				}
+			}
+			if (v && G::time_alive[to_aim_at.id] > 0.5f) {
+				aim_and_shoot(to_aim_at, speed);
 			}
 		}
 	}

@@ -476,14 +476,19 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 				{
 					ImGui::Checkbox("Aimbot", &G::S.aimbot);
 					ImGui::Checkbox("Ignore Visibility Check", &G::S.ignoreVisible);
-					ImGui::SliderFloat("Max Range", &G::S.maxAngleDiffAimbot, 10, 1000);
+					ImGui::Checkbox("Auto-Aim when Visible?", &G::S.autoAimWhenVisible);
+					if (!G::S.disableAngleDiff)
+						ImGui::SliderFloat("Max Range", &G::S.maxAngleDiffAimbot, 10, 1000);
 					ImGui::Checkbox("Disable Range", &G::S.disableAngleDiff);
+					ImGui::SliderInt("Aimbot Speed", &G::S.aimbotspeed, 500, 4000);
+					ImGui::SeparatorText("");
 					ImGui::Checkbox("Triggerbot", &G::S.triggerbot);
+					ImGui::Checkbox("Only shoot when still?", &G::S.onlyShootWhenStill);
+					ImGui::SliderFloat("Default Shoot Delay", &G::S.default_shoot_delay, 50, 1000, "%.3f ms");
+					ImGui::SeparatorText("");
 					ImGui::Checkbox("Recoil Control", &G::S.rcs);
 					ImGui::Checkbox("Bunnyhop", &G::S.bhop);
 					ImGui::Checkbox("Jump Shot", &G::S.jumpShotHack);
-					ImGui::SliderFloat("Def. Shoot Delay (ms)", &G::S.default_shoot_delay, 50, 1000);
-					ImGui::SliderInt("Aimbot Speed", &G::S.aimbotspeed, 500, 4000);
 					ImGui::EndTabItem();
 				}
 
@@ -568,7 +573,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 					ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
 					ImGui::SameLine();
-					ImGui::TextWrapped("It it important that the CS2 frames and Inverto render frames are in-sync. Therefore use VSync in both or cap it to the same FPS.");
+					ImGui::TextWrapped("It is important that the CS2 frames and Inverto render frames are in-sync. Therefore use VSync in both or cap it to the same FPS.");
 					
 					ImGui::EndTabItem();
 				}
@@ -659,6 +664,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					fs << "f/s";
 					ImGui::SameLine();
 					ImGui::TextColored(ImColor(255, 0, 255), fs.str().c_str());
+
+					ImGui::Checkbox("Show Velocity", &G::S.showVelocity);
 
 					ImGui::EndTabItem();
 				}

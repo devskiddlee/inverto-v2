@@ -69,6 +69,9 @@ public:
     bool chams = true;
     float chamsWidth = 2.f;
     bool espOnlyWhenVisible = true;
+    bool showVelocity = false;
+    bool onlyShootWhenStill = true;
+    bool autoAimWhenVisible = true;
 
 	ImColor normalColor{ 1.f, 0.f, 0.f };
 	ImColor directionCrosshair{ 1.f, 1.f, 0.f };

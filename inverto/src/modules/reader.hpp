@@ -24,7 +24,7 @@ void UpdateEntity(Entity& entity) {
 	entity.angleEye = G::memory.Read<Vector>(entity.address + G::offsets.eyeAngles);
 	entity.health = G::memory.Read<int>(entity.address + G::offsets.health);
 	entity.teamNum = G::memory.Read<int>(entity.address + G::offsets.teamNum);
-	entity.absVeloctiy = G::memory.Read<Vector>(entity.address + G::offsets.absVelocity);
+	entity.absVelocity = G::memory.Read<Vector>(entity.address + G::offsets.absVelocity);
 	entity.magnitude = CalcMagnitude(G::localPlayer.origin, entity.origin);
 
 	ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);

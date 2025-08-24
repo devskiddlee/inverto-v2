@@ -229,7 +229,7 @@ public:
 	int health = 0;
 	Vector origin;
 	Vector head;
-	Vector absVeloctiy;
+	Vector absVelocity;
 	int teamNum = 0;
 	int jumpFlag = 0;
 	Vector abs;
