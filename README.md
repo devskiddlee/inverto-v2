@@ -13,7 +13,8 @@ A feature-rich, completely external CS2 cheat written in c++
 If you want to have a feature added, open an issue
 
 ### Planned:
-- More Rage features (e.g. auto shoot)
+- More Rage features (e.g. auto shoot on vis)
+- Wallbang Calculations
 
 ## Additional Info
 The program ***never*** writes to the game's memory, it only reads from it.<br>
