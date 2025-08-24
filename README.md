@@ -21,4 +21,8 @@ The program ***never*** writes to the game's memory, it only reads from it.<br>
 Currently, as CS2 has no Client Anticheat it is therefore ***100% undetectable***.<br>
 The only reason you could be banned is if you get VACLive (but that would only be a short game ban :O).
 
+### Stats for my setup (i7-9700 & GTX 1660 Super):
+- ~1.00ms per tick  (~1000 ticks  per second)
+- ~1.58ms per frame (~630  frames per second)
+
 ### GLHF
