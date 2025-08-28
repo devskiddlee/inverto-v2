@@ -19,6 +19,9 @@ To install follow these steps:
 
 If you want to have a feature added, open an issue
 
+### Currently working on:
+- Player profiles, database and stats
+
 ### Planned:
 - Wallbang Calculations
 - ~~More Rage features (e.g. auto shoot on vis)~~ ✅
