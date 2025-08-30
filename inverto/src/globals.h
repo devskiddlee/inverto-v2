@@ -106,7 +106,7 @@ public:
 struct Triangle {
     Vector p1, p2, p3;
 
-    bool intersect(Vector ray_origin, Vector ray_end, float* t)
+    bool intersect(Vector ray_origin, Vector ray_end)
     {
         Vector edge1, edge2, h, s, q;
         float a, f, u, v;
@@ -131,12 +131,8 @@ struct Triangle {
         if (v < 0.0 || u + v > 1.0)
             return false;
 
-        *t = f * edge2.dot(q);
-
-        if (*t > FLT_EPSILON && *t < 1.0)
-            return true;
-
-        return false;
+        float t = f * edge2.dot(q);
+        return t > FLT_EPSILON && t < 1.0;
     }
 
     std::vector<ImVec2> to_screen(ViewMatrix currentVM) {
@@ -202,6 +198,8 @@ namespace G {
 
     std::string mapName;
     std::vector<Triangle> triangles_loaded;
+
+    bool use_AVX_512 = false;
 
 	Settings S{};
     Theme T{};

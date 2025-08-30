@@ -1,5 +1,6 @@
 ﻿#include "modules/modules.h"
 #include "offset_parser.h"
+#include "cpu_raycast.hpp"
 
 using namespace std;
 
@@ -68,12 +69,35 @@ bool CheckTheme(const char* name) {
 	return std::filesystem::exists(ss.str());
 }
 
+void padTrianglesToMultipleOf4(
+	std::vector<Vec3>& v0,
+	std::vector<Vec3>& v1,
+	std::vector<Vec3>& v2)
+{
+	size_t n = v0.size();
+	size_t remainder = n % 4;
+	if (remainder == 0) return;
+
+	size_t pad = 4 - remainder;
+
+	Vec3 dummy = { 0.0f, 0.0f, 0.0f };
+	for (size_t i = 0; i < pad; ++i) {
+		v0.push_back(dummy);
+		v1.push_back(dummy);
+		v2.push_back(dummy);
+	}
+}
+
 std::thread map_parser_thread;
 std::string lastMapName;
+std::vector<Vec3> loaded_triangles_p1;
+std::vector<Vec3> loaded_triangles_p2;
+std::vector<Vec3> loaded_triangles_p3;
 void map_parse_loop() {
 	while (map_parser_thread.joinable()) {
-		if (lastMapName != G::mapName) {
+		if ((lastMapName != G::mapName && !debug) || (debug && G::triangles_loaded.size() == 0)) {
 			lastMapName = G::mapName;
+			if (debug) lastMapName = "de_inferno";
 
 			if (!std::filesystem::exists("assets\\maps\\" + lastMapName + ".tri")) {
 				if (lastMapName != "" && lastMapName != "<empty>")
@@ -94,6 +118,20 @@ void map_parse_loop() {
 
 				in.read(reinterpret_cast<char*>(loaded.data()), count * sizeof(Triangle));
 			}
+
+			loaded_triangles_p1.clear();
+			loaded_triangles_p2.clear();
+			loaded_triangles_p3.clear();
+			for (auto& T : loaded) {
+				loaded_triangles_p1.emplace_back( T.p1.x, T.p1.y, T.p1.z );
+				loaded_triangles_p2.emplace_back( T.p2.x, T.p2.y, T.p2.z );
+				loaded_triangles_p3.emplace_back( T.p3.x, T.p3.y, T.p3.z );
+			}
+			padTrianglesToMultipleOf4(
+				loaded_triangles_p1,
+				loaded_triangles_p2,
+				loaded_triangles_p3
+			);
 
 			G::triangles_loaded = loaded;
 			info("Map '" + lastMapName + "' loaded (" + str(loaded.size()) + " triangles).");
@@ -120,20 +158,39 @@ void enemy_visibility_loop(){
 
 		std::list<Entity> entities = Reader::GetEntities();
 
+		if (debug) {
+			Entity e;
+			e.head = Vector(500.f, 500.f, 500.f);
+			e.id = "0";
+			entities.push_back(e);
+		}
+
 		for (auto& e : entities) {
 			Vector S = G::localPlayer.head;
 			Vector E = e.head;
+			if (debug) S = Vector(100.f, 100.f, 100.f);
 
-			bool v = true;
+			bool hit;
+			if (G::use_AVX_512) {
+				hit = anyHitAVX512(
+					{ S.x, S.y, S.z },
+					{ E.x, E.y, E.z },
+					loaded_triangles_p1,
+					loaded_triangles_p2,
+					loaded_triangles_p3
+				);
+			}
+			else {
+				hit = anyHitSIMD(
+					{ S.x, S.y, S.z },
+					{ E.x, E.y, E.z },
+					loaded_triangles_p1,
+					loaded_triangles_p2,
+					loaded_triangles_p3
+				);
+			}
 
-			float t;
-			for (Triangle& T : G::triangles_loaded)
-				if (T.intersect(S, E, &t)) {
-					v = false;
-					break;
-				}
-
-			G::visibleMap[e.id] = v;
+			G::visibleMap[e.id] = !hit;
 		}
 
 		auto end = std::chrono::high_resolution_clock::now();
@@ -222,6 +279,11 @@ void op() {
 
 	map_parser_thread = std::thread{ map_parse_loop };
 	enemy_visibility_thread = std::thread{ enemy_visibility_loop };
+
+	if (!cpuSupportsAVX512())
+		warning("AVX-512 not supported on your CPU, fallback to AVX2");
+	else
+		G::use_AVX_512 = true;
 
 	setup = true;
 }
