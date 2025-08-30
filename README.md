@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://discord.gg/pvSBbkvchr" target="_blank">
+    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/join_the_discord.png" href="https://discord.gg/pvSBbkvchr">
+	</a>
+</p>
+
 ![demo pic](https://github.com/devskiddlee/inverto-v2/blob/main/demo/inverto.png)
 
 # inverto-v2
