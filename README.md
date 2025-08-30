@@ -22,7 +22,7 @@ To install follow these steps:
 If you want to have a feature added, open an issue
 
 ### Currently working on:
-- Performance Improvments @ Visibility Checks
+- Performance Improvements @ Visibility Checks
 
 ### Planned:
 - Wallbang Calculations
