@@ -27,7 +27,7 @@ To install follow these steps:
 - Player profiles
 - & many more
 
-If you want to have a feature added, open an issue
+If you want to have a feature added, go to #cheat-requests in the dc!
 
 ### Currently working on:
 - nothing, give me ideas :)
