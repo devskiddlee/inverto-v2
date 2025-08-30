@@ -253,7 +253,7 @@ public:
 		if (G::S.showVelocity) {
 			Vector velocity = G::localPlayer.absVelocity;
 			velocity.z = 0.f;
-			std::string velocity_str = str((int)velocity.length());
+			std::string velocity_str = str((int)velocity.length()) + " u/s";
 			float text_width = G::default_font->CalcTextSizeA(30.f, 1000, 1000, velocity_str.c_str()).x;
 			event.drawList->AddText(G::default_font, 30.f, { G::windowSize.x / 2 - text_width / 2, 700 }, ImColor(255, 255, 0), velocity_str.c_str());
 		

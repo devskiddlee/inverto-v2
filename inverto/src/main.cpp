@@ -4,6 +4,7 @@
 using namespace std;
 
 ImFont* console_font;
+ImFont* menu_font;
 ImGuiIO* io_ptr;
 bool debug = false;
 bool setup = false;
@@ -45,6 +46,28 @@ bool CheckConfig(const char* name) {
 	return std::filesystem::exists(ss.str());
 }
 
+void ReadTheme(const char* name) {
+	ostringstream ss;
+	ss << "assets\\" << name << ".theme";
+	std::ifstream in(ss.str(), std::ios::binary);
+	in.read(reinterpret_cast<char*>(&G::T), sizeof(G::T));
+	G::current_theme = std::string(name);
+	confirm("Theme " + G::current_theme + " loaded");
+}
+
+void WriteTheme(const char* name) {
+	ostringstream ss;
+	ss << "assets\\" << name << ".theme";
+	std::ofstream out(ss.str(), std::ios::binary);
+	out.write(reinterpret_cast<const char*>(&G::T), sizeof(G::T));
+}
+
+bool CheckTheme(const char* name) {
+	ostringstream ss;
+	ss << "assets\\" << name << ".theme";
+	return std::filesystem::exists(ss.str());
+}
+
 std::thread map_parser_thread;
 std::string lastMapName;
 void map_parse_loop() {
@@ -71,39 +94,58 @@ void map_parse_loop() {
 
 				in.read(reinterpret_cast<char*>(loaded.data()), count * sizeof(Triangle));
 			}
+
 			G::triangles_loaded = loaded;
 			info("Map '" + lastMapName + "' loaded (" + str(loaded.size()) + " triangles).");
 		}
 	}
 }
 
-Vector collisionPoint;
-Triangle collisionTriangle;
+std::vector<Vector> collisionPoints;
+std::vector<Triangle> collisionTriangles;
 std::thread enemy_visibility_thread;
+
+int vis_ticks = 0;
+float vis_time = 0.f;
+float avg_vis_time = 0.f;
+
 void enemy_visibility_loop(){
 	while (enemy_visibility_thread.joinable()) {
+		auto start = std::chrono::high_resolution_clock::now();
+
+		if (G::triangles_loaded.size() == 0) {
+			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(50));
+			continue;
+		}
+
 		std::list<Entity> entities = Reader::GetEntities();
+
 		for (auto& e : entities) {
+			Vector S = G::localPlayer.head;
+			Vector E = e.head;
+
 			bool v = true;
-			float t = 0.f;
 
-			Vector origin = G::localPlayer.head;
-			Vector end = e.head;
-
+			float t;
 			for (Triangle& T : G::triangles_loaded)
-				if (T.intersect(origin, end, &t)) {
+				if (T.intersect(S, E, &t)) {
 					v = false;
-					collisionTriangle = T;
 					break;
 				}
 
-			if (!v)
-				collisionPoint = origin.copy() + (end.copy() - origin) * Vector(t, t, t);
-			
-			if (G::triangles_loaded.size() == 0)
-				continue;
-
 			G::visibleMap[e.id] = v;
+		}
+
+		auto end = std::chrono::high_resolution_clock::now();
+
+		auto elapsed_time = std::chrono::duration<float, std::milli>(end - start).count();
+
+		vis_ticks++;
+		vis_time += elapsed_time;
+		if (vis_time > 1000) {
+			avg_vis_time = vis_time / vis_ticks;
+			vis_time = 0;
+			vis_ticks = 0;
 		}
 	}
 }
@@ -169,6 +211,13 @@ void op() {
 
 	ReadConfig("default");
 
+	if (!CheckTheme("default") || debug) {
+		warning("Default Theme not found... creating one...");
+		WriteTheme("default");
+	}
+
+	ReadTheme("default");
+
 	Modular::StartTickLoop();
 
 	map_parser_thread = std::thread{ map_parse_loop };
@@ -192,6 +241,39 @@ bool ColorPicker(ImColor* color) {
 	*color = ImColor(vec[0], vec[1], vec[2], vec[3]);
 	
 	return result;
+}
+
+bool ColorPicker(ImVec4* color) {
+	float vec[4];
+
+	vec[0] = color->x;
+	vec[1] = color->y;
+	vec[2] = color->z;
+	vec[3] = color->w;
+
+	bool result = ImGui::ColorPicker4("Color", vec);
+
+	*color = ImVec4(vec[0], vec[1], vec[2], vec[3]);
+
+	return result;
+}
+
+void DebugStat(const char* label, float value, const char* suffix) {
+	ImGui::TextColored(ImColor(200, 200, 200), label);
+	std::ostringstream tt;
+	tt << value;
+	tt << suffix;
+	ImGui::SameLine();
+	ImGui::TextColored(ImColor(255, 0, 255), tt.str().c_str());
+}
+
+void DebugStat(const char* label, int value, const char* suffix) {
+	ImGui::TextColored(ImColor(200, 200, 200), label);
+	std::ostringstream tt;
+	tt << value;
+	tt << suffix;
+	ImGui::SameLine();
+	ImGui::TextColored(ImColor(255, 0, 255), tt.str().c_str());
 }
 
 std::unordered_map<std::string, bool> waiting_for_key;
@@ -230,6 +312,7 @@ void PressKey(int vk) {
 }
 
 char config_input[255];
+char theme_input[255];
 
 void SetWindowInteractivity(HWND hwnd, bool interactive)
 {
@@ -253,6 +336,19 @@ void SetWindowInteractivity(HWND hwnd, bool interactive)
 	}
 }
 
+void PushMenuStyle() {
+	for (int i = 0; i < 58; i++)
+		ImGui::PushStyleColor(i, G::T.Colors[i]);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, G::T.menu_windowRounding);
+	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, G::T.menu_frameRounding);
+	ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, G::T.menu_frameRounding);
+}
+
+void PopMenuStyle() {
+	ImGui::PopStyleVar(3);
+	ImGui::PopStyleColor(58);
+}
+
 int frames = 0;
 float frame_time = 0.f;
 float avg_frame_time = 0.f;
@@ -261,6 +357,11 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	if (!std::filesystem::exists("assets\\default_font.ttf")) {
 		MessageBoxA(0, "Please install inverto correctly", "default_font.ttf not found", MB_ICONERROR);
+		return 0;
+	}
+
+	if (!std::filesystem::exists("assets\\menu_font.ttf")) {
+		MessageBoxA(0, "Please install inverto correctly", "menu_font.ttf not found", MB_ICONERROR);
 		return 0;
 	}
 
@@ -385,8 +486,12 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	ImGuiIO& io = ImGui::GetIO();
 	console_font = io.Fonts->AddFontFromFileTTF("assets\\default_font.ttf");
+	menu_font = io.Fonts->AddFontFromFileTTF("assets\\menu_font.ttf");
 	G::default_font = console_font;
 	io_ptr = &io;
+
+	for (int i = 0; i < 58; i++)
+		G::T.Colors[i] = ImGui::GetStyle().Colors[i];
 
 	bool running = true;
 
@@ -459,6 +564,25 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			}
 		}
 
+		if (G::S.showVisibilityCollisions) {
+			ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);
+			std::list<float> distances;
+			for (Vector& P : collisionPoints) {
+				distances.push_back(CalcMagnitude(P, G::localPlayer.head));
+				draw3dBoxAroundLine(
+					drawList, currentVM,
+					P.copy() + Vector(0, 0, 5),
+					P.copy() - Vector(0, 0, 5),
+					1.0, 0.0, 5.f
+				);
+			}
+			distances.sort();
+			float wallbang_dist = distances.back() - distances.front();
+			std::string wallbang_str = "WB: " + str(wallbang_dist);
+			float text_width = G::default_font->CalcTextSizeA(30.f, 1000, 1000, wallbang_str.c_str()).x;
+			drawList->AddText(G::default_font, 30.f, { G::windowSize.x / 2 - text_width / 2, 300 }, ImColor(255, 0, 255), wallbang_str.c_str());
+		}
+
 		if (setup) {
 			RenderEvent event;
 			event.drawList = drawList;
@@ -466,7 +590,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		}
 
 		if (G::render_ui) {
-			ImGui::PushFont(G::default_font);
+			PushMenuStyle();
+
+			ImGui::PushFont(menu_font, G::T.menu_fontSize);
 
 			ImGui::Begin("inverto");
 
@@ -604,20 +730,127 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						ss << f;
 						std::string cfg_name = getBetween(ss.str(), "assets\\\\", ".config");
 						ImGui::Text(cfg_name.c_str());
+						ImGui::PushID(ix);
+						ImGui::SameLine();
+						if (ImGui::Button("Load")) {
+							ReadConfig(cfg_name.c_str());
+						}
 						if (cfg_name != "default") {
-							ImGui::PushID(ix);
-							ImGui::SameLine();
-							if (ImGui::Button("Load")) {
-								ReadConfig(cfg_name.c_str());
-							}
 							ImGui::SameLine();
 							if (ImGui::Button("Delete")) {
 								if (cfg_name == G::current_config)
 									ReadConfig("default");
 								std::filesystem::remove(f);
 							}
-							ImGui::PopID();
 						}
+						ImGui::PopID();
+						ix++;
+					}
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("Themes")) {
+
+					ImGui::TextColored(ImVec4(0.f, 1.f, 0.f, 1.f), ("Current Theme: " + G::current_theme).c_str());
+					if (ImGui::Button(("Save " + G::current_theme).c_str())) {
+						WriteTheme(G::current_theme.c_str());
+					}
+					ImGui::SeparatorText("Create Theme");
+					ImGui::InputText("##xx", theme_input, sizeof(theme_input));
+					if (std::string(theme_input).length() > 0) {
+						if (is_valid_filename(theme_input) && !CheckTheme(theme_input)) {
+							if (ImGui::Button(("Create " + std::string(theme_input) + ".theme").c_str())) {
+								WriteTheme(theme_input);
+								confirm(std::string(theme_input) + ".theme created");
+								theme_input[0] = 0;
+							}
+						}
+						else {
+							ImGui::TextColored(ImColor(255, 0, 0), "Already exists or Invalid Filename");
+						}
+					}
+					ImGui::SeparatorText("Themes");
+					int ix = 0;
+					for (auto& f : get_files_with_extension("assets", ".theme")) {
+						std::ostringstream ss;
+						ss << f;
+						std::string theme_name = getBetween(ss.str(), "assets\\\\", ".theme");
+						ImGui::Text(theme_name.c_str());
+
+						ImGui::PushID(ix);
+						ImGui::SameLine();
+						if (ImGui::Button("Load")) {
+							ReadTheme(theme_name.c_str());
+						}
+
+						if (theme_name != "default") {
+							ImGui::SameLine();
+							if (ImGui::Button("Delete")) {
+								if (theme_name == G::current_theme)
+									ReadTheme("default");
+								std::filesystem::remove(f);
+							}
+						}
+						ImGui::PopID();
+						ix++;
+					}
+
+					ImGui::SeparatorText("Edit UI Settings");
+
+					ImGui::SliderInt("Font Size", &G::T.menu_fontSize, 5, 50, "%dpt");
+					ImGui::SliderFloat("Frame Rounding", &G::T.menu_frameRounding, 0.f, 20.f);
+					ImGui::SliderFloat("Window Rounding", &G::T.menu_windowRounding, 0.f, 20.f);
+
+					ImGui::SeparatorText("Edit Colors");
+
+					if (ImGui::Button("Dark Preset")) {
+						ImGui::StyleColorsDark();
+						for (int i = 0; i < 58; i++)
+							G::T.Colors[i] = ImGui::GetStyle().Colors[i];
+					}
+
+					ImGui::SameLine();
+					if (ImGui::Button("Light Preset")) {
+						ImGui::StyleColorsLight();
+						for (int i = 0; i < 58; i++)
+							G::T.Colors[i] = ImGui::GetStyle().Colors[i];
+					}
+
+					ImGui::SameLine();
+					if (ImGui::Button("Classic Preset")) {
+						ImGui::StyleColorsClassic();
+						for (int i = 0; i < 58; i++)
+							G::T.Colors[i] = ImGui::GetStyle().Colors[i];
+					}
+
+					for (int i = 0; i < 58; i++) {
+						const char* name = ImGuiColToString(i);
+						if (name != "" && ImGui::BeginMenu(name)) {
+							ColorPicker(&G::T.Colors[i]);
+							ImGui::EndMenu();
+						}
+					}
+
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("Players")) {
+					int ix = 0;
+					for (Entity& player : G::render_entities) {
+						if (player.steam_id == 0)
+							continue;
+
+						ImGui::PushID(ix);
+						if (ImGui::BeginMenu(player.name.c_str())) {
+							ImGui::TextColored(ImColor(200, 200, 200), "SteamID: ");
+							ImGui::SameLine();
+							ImGui::TextColored(ImColor(200, 0, 200), str(player.steam_id).c_str());
+							if (ImGui::Button("Open Stats [csst.at]")) {
+								ShellExecute(0, 0, ("https://csst.at/profile/" + str(player.steam_id)).c_str(), 0, 0, SW_SHOW);
+							}
+							ImGui::EndMenu();
+						}
+						ImGui::PopID();
 						ix++;
 					}
 					ImGui::EndTabItem();
@@ -635,42 +868,36 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 					ImGui::SeparatorText("Tick Timing");
 
-					ImGui::TextColored(ImColor(200, 200, 200), "Time per Tick: ");
-					std::ostringstream tt;
-					tt << Modular::GetAverageTickTime();
-					tt << "ms";
-					ImGui::SameLine();
-					ImGui::TextColored(ImColor(255, 0, 255), tt.str().c_str());
-
-					ImGui::TextColored(ImColor(200, 200, 200), "Ticks per Second: ");
-					std::ostringstream ts;
-					ts << (int)(1000 / Modular::GetAverageTickTime());
-					ts << "t/s";
-					ImGui::SameLine();
-					ImGui::TextColored(ImColor(255, 0, 255), ts.str().c_str());
+					DebugStat("Time per Tick: ", Modular::GetAverageTickTime(), "ms");
+					DebugStat("Ticks per Second: ", (int)(1000 / Modular::GetAverageTickTime()), "t/s");
 
 					ImGui::SeparatorText("Frame Timing");
 
-					ImGui::TextColored(ImColor(200, 200, 200), "Time per Frame: ");
-					std::ostringstream tf;
-					tf << avg_frame_time;
-					tf << "ms";
-					ImGui::SameLine();
-					ImGui::TextColored(ImColor(255, 0, 255), tf.str().c_str());
+					DebugStat("Time per Frame: ", avg_frame_time, "ms");
+					DebugStat("Frames per Second: ", (int)(1000 / avg_frame_time), "f/s");
 
-					ImGui::TextColored(ImColor(200, 200, 200), "Frames per Second: ");
-					std::ostringstream fs;
-					fs << (int)(1000 / avg_frame_time);
-					fs << "f/s";
-					ImGui::SameLine();
-					ImGui::TextColored(ImColor(255, 0, 255), fs.str().c_str());
+					ImGui::SeparatorText("Collision Detection");
+
+					DebugStat("Time per VisTick: ", avg_vis_time, "ms");
+					DebugStat("VisTicks per Second: ", (int)(1000 / avg_vis_time), "vt/s");
+
+					ImGui::SeparatorText("Velocity");
 
 					ImGui::Checkbox("Show Velocity", &G::S.showVelocity);
+
+					/*
+					ImGui::SeparatorText("-insecure");
+
+					ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
+					ImGui::SameLine();
+					ImGui::TextWrapped("Please enable -insecure before using these options, as these write to the game and will get you banned otherwise!");
+					*/
 
 					ImGui::EndTabItem();
 				}
 			}
 
+			PopMenuStyle();
 			ImGui::PopFont();
 			ImGui::EndTabBar();
 			ImGui::End();

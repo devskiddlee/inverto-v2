@@ -1,3 +1,4 @@
+#pragma once
 #include <mem/memify.h>
 #include "offsets.h"
 #include "utils.hpp"
@@ -24,6 +25,11 @@ Vector CalcAngles(Vector from, Vector to)
 
     return Vector(yaw, pitch, 0);
 }
+
+struct PlayerInfos {
+    uint64_t steam_id = 0;
+    std::string note = "";
+};
 
 //Settings
 class Settings {
@@ -68,10 +74,11 @@ public:
     bool boxEsp = true;
     bool chams = true;
     float chamsWidth = 2.f;
-    bool espOnlyWhenVisible = true;
+    bool espOnlyWhenVisible = false;
     bool showVelocity = false;
+    bool showVisibilityCollisions = false;
     bool onlyShootWhenStill = true;
-    bool autoAimWhenVisible = true;
+    bool autoAimWhenVisible = false;
 
 	ImColor normalColor{ 1.f, 0.f, 0.f };
 	ImColor directionCrosshair{ 1.f, 1.f, 0.f };
@@ -85,6 +92,15 @@ public:
 
     bool vsync = true;
     int frame_cap = 100;
+    int visibility_thread_n = 1;
+};
+
+class Theme {
+public:
+    int menu_fontSize = 20;
+    float menu_frameRounding = 0;
+    float menu_windowRounding = 0;
+    ImVec4 Colors[58];
 };
 
 struct Triangle {
@@ -122,6 +138,16 @@ struct Triangle {
 
         return false;
     }
+
+    std::vector<ImVec2> to_screen(ViewMatrix currentVM) {
+        Vector sp1(-10000, -10000, 0);
+        Vector sp2(-10000, -10000, 0);
+        Vector sp3(-10000, -10000, 0);
+        world_to_screen(p1, sp1, currentVM);
+        world_to_screen(p2, sp2, currentVM);
+        world_to_screen(p3, sp3, currentVM);
+        return { sp1.toVec2(), sp2.toVec2(), sp3.toVec2() };
+    }
 };
 
 namespace G {
@@ -135,6 +161,8 @@ namespace G {
 	Vector windowLocation = Vector(0, 0, 0);
 	Vector windowSize = Vector(1920, 1080, 0);
 	Vector windowCenter = windowSize.copy() / Vector(2, 2, 2);
+
+    float FOV_conversion_factor = 1.f;
 
 	std::list<console_message> console;
 
@@ -170,11 +198,13 @@ namespace G {
 	bool render_ui = false;
 
     std::string current_config;
+    std::string current_theme;
 
     std::string mapName;
     std::vector<Triangle> triangles_loaded;
 
 	Settings S{};
+    Theme T{};
 }
 
 int console_show = 0;

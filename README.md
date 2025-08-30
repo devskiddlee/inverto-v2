@@ -15,12 +15,13 @@ To install follow these steps:
 - Anti Flashbang
 - Configs
 - Auto Offset Updater
+- Player profiles
 - & many more
 
 If you want to have a feature added, open an issue
 
 ### Currently working on:
-- Player profiles, database and stats
+- Performance Improvments @ Visibility Checks
 
 ### Planned:
 - Wallbang Calculations

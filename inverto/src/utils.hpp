@@ -243,6 +243,7 @@ public:
 	float angleDiff = 0.f;
 	int jumpButton = 0;
 	std::string name;
+	uint64_t steam_id = 0;
 	std::list<Vector> bone_pos;
 	std::list<Vector> bone_screen_pos;
 	float dist = 0.f;
@@ -483,4 +484,65 @@ bool is_valid_filename(const char* name)
 	}
 
 	return true;
+}
+
+const char* ImGuiColToString(ImGuiCol col)
+{
+	switch (col)
+	{
+		case ImGuiCol_Text:                  return "Text";
+		case ImGuiCol_TextDisabled:          return "TextDisabled";
+		case ImGuiCol_WindowBg:              return "Window Background";
+		case ImGuiCol_ChildBg:               return "Child Background";
+		case ImGuiCol_PopupBg:               return "Popup Background";
+		case ImGuiCol_Border:                return "Border";
+		case ImGuiCol_BorderShadow:          return "Border Shadow";
+		case ImGuiCol_FrameBg:               return "Frame Background";
+		case ImGuiCol_FrameBgHovered:        return "Frame Background Hovered";
+		case ImGuiCol_FrameBgActive:         return "Frame Background Active";
+		case ImGuiCol_TitleBg:               return "Title Background";
+		case ImGuiCol_TitleBgActive:         return "Title Background Active";
+		case ImGuiCol_TitleBgCollapsed:      return "Title Background Collapsed";
+		case ImGuiCol_MenuBarBg:             return "MenuBar Background";
+		case ImGuiCol_ScrollbarBg:           return "Scrollbar Background";
+		case ImGuiCol_ScrollbarGrab:         return "Scrollbar Grab";
+		case ImGuiCol_ScrollbarGrabHovered:  return "Scrollbar Grab Hovered";
+		case ImGuiCol_ScrollbarGrabActive:   return "Scrollbar Grab Active";
+		case ImGuiCol_CheckMark:             return "Checkmark";
+		case ImGuiCol_SliderGrab:            return "Slider Grab";
+		case ImGuiCol_SliderGrabActive:      return "Slider Grab Active";
+		case ImGuiCol_Button:                return "Button";
+		case ImGuiCol_ButtonHovered:         return "Button Hovered";
+		case ImGuiCol_ButtonActive:          return "Button Active";
+		case ImGuiCol_Header:                return "Header";
+		case ImGuiCol_HeaderHovered:         return "Header Hovered";
+		case ImGuiCol_HeaderActive:          return "Header Active";
+		case ImGuiCol_Separator:             return "Separator";
+		case ImGuiCol_SeparatorHovered:      return "Separator Hovered";
+		case ImGuiCol_SeparatorActive:       return "Separator Active";
+		case ImGuiCol_ResizeGrip:            return "Resize Grip";
+		case ImGuiCol_ResizeGripHovered:     return "Resize Grip Hovered";
+		case ImGuiCol_ResizeGripActive:      return "Resize Grip Active";
+		case ImGuiCol_Tab:                   return "Tab";
+		case ImGuiCol_TabHovered:            return "Tab Hovered";
+		case ImGuiCol_TabActive:             return "Tab Active";
+		case ImGuiCol_TabUnfocused:          return "Tab Unfocused";
+		case ImGuiCol_TabUnfocusedActive:    return "Tab Unfocused Active";
+		case ImGuiCol_PlotLines:             return "Plot Lines";
+		case ImGuiCol_PlotLinesHovered:      return "Plot Lines Hovered";
+		case ImGuiCol_PlotHistogram:         return "Plot Histogram";
+		case ImGuiCol_PlotHistogramHovered:  return "Plot Histogram Hovered";
+		case ImGuiCol_TableHeaderBg:         return "Table Header Background";
+		case ImGuiCol_TableBorderStrong:     return "Table Border Strong";
+		case ImGuiCol_TableBorderLight:      return "Table Border Light";
+		case ImGuiCol_TableRowBg:            return "Table Row Background";
+		case ImGuiCol_TableRowBgAlt:         return "Table Row Background Alt";
+		case ImGuiCol_TextSelectedBg:        return "Text Selected Background";
+		case ImGuiCol_DragDropTarget:        return "Drag & Drop Target";
+		case ImGuiCol_NavHighlight:          return "Nav Highlight";
+		case ImGuiCol_NavWindowingHighlight: return "Nav Windowing Highlight";
+		case ImGuiCol_NavWindowingDimBg:     return "Nav Windowing Dim Background";
+		case ImGuiCol_ModalWindowDimBg:      return "Modal Window Dim Background";
+		default:                             return "";
+	}
 }

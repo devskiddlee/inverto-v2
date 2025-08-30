@@ -88,6 +88,7 @@ void UpdateEntities(std::list<Entity>& entities)
 		std::string name = ss.str();
 		trim(name);
 		entity.name = name;
+		entity.steam_id = G::memory.Read<uint64_t>(currController + G::offsets.steamid);
 
 		entity.id = str(entity.address) + entity.name;
 		entity.visible = G::visibleMap[entity.id];
@@ -127,6 +128,7 @@ void ReloadEntities(std::list<Entity>& entities)
 	G::localPlayer.address = G::memory.Read<uintptr_t>(G::client + G::offsets.localPlayer);
 
 	UpdateEntity(G::localPlayer);
+	G::localPlayer.steam_id = G::memory.Read<uint64_t>(G::localPlayerController + G::offsets.steamid);
 
 	UpdateEntities(entities);
 }
@@ -153,6 +155,7 @@ public:
 				temp_nearest_player = player;
 			}
 		}
+
 		G::nearest_player = Entity(temp_nearest_player);
 		G::entities = std::list<Entity>(entities);
 	}
@@ -169,6 +172,7 @@ public:
 				temp_nearest_player = player;
 			}
 		}
+
 		G::render_nearest_player = Entity(temp_nearest_player);
 		G::render_entities = std::list<Entity>(entities);
 	}

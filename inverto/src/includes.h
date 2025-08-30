@@ -17,8 +17,10 @@
 #include <stdexcept>
 #include <filesystem>
 #include <cmath>
+#include <ctime>
 
 #include <Windows.h>
+#include <shellapi.h>
 #include <dwmapi.h>
 #include <d3d11.h>
 #include <tlhelp32.h>
