@@ -14,6 +14,7 @@ To install follow these steps:
 - Triggerbot
 - Anti Flashbang
 - Configs
+- Themes
 - Auto Offset Updater
 - Player profiles
 - & many more
