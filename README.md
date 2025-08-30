@@ -24,7 +24,7 @@ To install follow these steps:
 If you want to have a feature added, open an issue
 
 ### Currently working on:
-- Performance Improvements @ Visibility Checks
+- nothing, give me ideas :)
 
 ### Planned:
 - Wallbang Calculations
