@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://ko-fi.com/skiddlee" target="_blank">
-    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/kofi.png">
+    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/kofi.jpg">
   </a>
 </p>
 
