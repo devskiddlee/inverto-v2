@@ -1,7 +1,13 @@
 <p align="center">
   <a href="https://discord.gg/pvSBbkvchr" target="_blank">
-    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/join_the_discord.png" href="https://discord.gg/pvSBbkvchr">
+    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/join_the_discord.png">
 	</a>
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/skiddlee" target="_blank">
+    <img src="https://github.com/devskiddlee/inverto-v2/blob/main/demo/kofi.png">
+  </a>
 </p>
 
 ![demo pic](https://github.com/devskiddlee/inverto-v2/blob/main/demo/inverto.png)
