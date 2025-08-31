@@ -42551,5 +42551,11 @@
     <ClInclude Include="external\boost\xpressive\xpressive_typeof.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\cpu_raycast.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\modules\hud.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

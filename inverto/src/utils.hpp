@@ -11,6 +11,32 @@
 #include <set>
 #include <imgui/imgui.h>
 #include <filesystem>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Media.Control.h>
+
+template <class T>
+std::string str(T obj) {
+	std::ostringstream os;
+	os << obj;
+	return os.str();
+}
+
+std::pair<std::string, std::string> get_media() {
+	winrt::init_apartment();
+
+	auto manager = winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
+	auto session = manager.GetCurrentSession();
+
+	if (session) {
+		auto mediaProps = session.TryGetMediaPropertiesAsync().get();
+		std::string title = winrt::to_string(mediaProps.Title());
+		std::string artist = winrt::to_string(mediaProps.Artist());
+		return std::pair(title, artist);
+	}
+	else {
+		return std::pair("", "");
+	}
+}
 
 template <class T>
 static T get_object_at_index(std::list<T> list, int index) {
@@ -544,5 +570,39 @@ const char* ImGuiColToString(ImGuiCol col)
 	case ImGuiCol_NavWindowingDimBg:     return "Nav Windowing Dim Background";
 	case ImGuiCol_ModalWindowDimBg:      return "Modal Window Dim Background";
 	default:                             return "";
+	}
+}
+
+void DrawGradientText(const char* text, ImVec2 pos, ImU32 colorStart, ImU32 colorEnd, float gradientOffset, ImFont* font, float fontSize) {
+	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+	int len = strlen(text);
+
+	int visibleCount = 0;
+	for (int i = 0; text[i]; i++)
+		if (text[i] != ' ') visibleCount++;
+
+	int visibleIndex = 0;
+	ImVec2 cursorPos = pos;
+
+	for (int i = 0; text[i]; i++) {
+		char buf[2] = { text[i], '\0' };
+		float charWidth = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, buf).x;
+
+		if (text[i] != ' ') {
+			float t = (float)visibleIndex / (float)(visibleCount - 1);
+			t = fmodf(t + gradientOffset, 1.0f);
+
+			int r = (int)((1.0f - t) * ((colorStart >> IM_COL32_R_SHIFT) & 0xFF) + t * ((colorEnd >> IM_COL32_R_SHIFT) & 0xFF));
+			int g = (int)((1.0f - t) * ((colorStart >> IM_COL32_G_SHIFT) & 0xFF) + t * ((colorEnd >> IM_COL32_G_SHIFT) & 0xFF));
+			int b = (int)((1.0f - t) * ((colorStart >> IM_COL32_B_SHIFT) & 0xFF) + t * ((colorEnd >> IM_COL32_B_SHIFT) & 0xFF));
+			int a = (int)((1.0f - t) * ((colorStart >> IM_COL32_A_SHIFT) & 0xFF) + t * ((colorEnd >> IM_COL32_A_SHIFT) & 0xFF));
+
+			ImU32 col = IM_COL32(r, g, b, a);
+			drawList->AddText(font, fontSize, cursorPos, col, buf);
+
+			visibleIndex++;
+		}
+
+		cursorPos.x += charWidth;
 	}
 }

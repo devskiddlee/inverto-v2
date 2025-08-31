@@ -20,6 +20,7 @@
 
 struct RenderEvent {
 	ImDrawList* drawList;
+	float last_draw_time;
 };
 
 struct TickEvent {

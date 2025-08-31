@@ -73,14 +73,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)\build\</OutDir>
     <IntDir>$(SolutionDir)\build\intermediates\</IntDir>
-    <IncludePath>C:\Users\skiddlee\source\repos\inverto\inverto\external;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\skiddlee\source\repos\inverto\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)/include/;C:\Users\skiddlee\source\repos\inverto\inverto\external;$(IncludePath)</IncludePath>
+    <LibraryPath>%CUDA_PATH%\lib\x64\;C:\Users\skiddlee\source\repos\inverto\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)\build\</OutDir>
     <IntDir>$(SolutionDir)\build\intermediates\</IntDir>
-    <IncludePath>C:\Users\skiddlee\source\repos\inverto\inverto\external;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\skiddlee\source\repos\inverto\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)/include/;C:\Users\skiddlee\source\repos\inverto\inverto\external;$(IncludePath)</IncludePath>
+    <LibraryPath>%CUDA_PATH%\lib\x64\;C:\Users\skiddlee\source\repos\inverto\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -122,7 +122,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>OpenCL.lib;iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;windowsapp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>C:\Users\skiddlee\source\repos\inverto\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -142,7 +142,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>OpenCL.lib;iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;windowsapp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>C:\Users\skiddlee\source\repos\inverto\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -14314,12 +14314,14 @@
     <ClInclude Include="external\imgui\imstb_truetype.h" />
     <ClInclude Include="external\mem\memify.h" />
     <ClInclude Include="src\globals.h" />
+    <ClInclude Include="src\cpu_raycast.hpp" />
     <ClInclude Include="src\Header.h" />
     <ClInclude Include="src\includes.h" />
     <ClInclude Include="src\modular.h" />
     <ClInclude Include="src\modules\bell_player.hpp" />
     <ClInclude Include="src\modules\esp.hpp" />
     <ClInclude Include="src\modules\aimbot.hpp" />
+    <ClInclude Include="src\modules\hud.hpp" />
     <ClInclude Include="src\modules\misc.hpp" />
     <ClInclude Include="src\modules\module_includes.h" />
     <ClInclude Include="src\modules\reader.hpp" />

@@ -8,6 +8,7 @@ ImFont* console_font;
 ImFont* menu_font;
 ImGuiIO* io_ptr;
 bool debug = false;
+bool debug_map = false;
 bool setup = false;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -95,9 +96,9 @@ std::vector<Vec3> loaded_triangles_p2;
 std::vector<Vec3> loaded_triangles_p3;
 void map_parse_loop() {
 	while (map_parser_thread.joinable()) {
-		if ((lastMapName != G::mapName && !debug) || (debug && G::triangles_loaded.size() == 0)) {
+		if ((lastMapName != G::mapName && !debug_map) || (debug_map && G::triangles_loaded.size() == 0)) {
 			lastMapName = G::mapName;
-			if (debug) lastMapName = "de_inferno";
+			if (debug_map) lastMapName = "de_inferno";
 
 			if (!std::filesystem::exists("assets\\maps\\" + lastMapName + ".tri")) {
 				if (lastMapName != "" && lastMapName != "<empty>")
@@ -145,7 +146,6 @@ std::thread enemy_visibility_thread;
 
 int vis_ticks = 0;
 float vis_time = 0.f;
-float avg_vis_time = 0.f;
 
 void enemy_visibility_loop(){
 	while (enemy_visibility_thread.joinable()) {
@@ -158,7 +158,7 @@ void enemy_visibility_loop(){
 
 		std::list<Entity> entities = Reader::GetEntities();
 
-		if (debug) {
+		if (debug_map) {
 			Entity e;
 			e.head = Vector(500.f, 500.f, 500.f);
 			e.id = "0";
@@ -168,7 +168,7 @@ void enemy_visibility_loop(){
 		for (auto& e : entities) {
 			Vector S = G::localPlayer.head;
 			Vector E = e.head;
-			if (debug) S = Vector(100.f, 100.f, 100.f);
+			if (debug_map) S = Vector(100.f, 100.f, 100.f);
 
 			bool hit;
 			if (G::use_AVX_512) {
@@ -200,7 +200,7 @@ void enemy_visibility_loop(){
 		vis_ticks++;
 		vis_time += elapsed_time;
 		if (vis_time > 1000) {
-			avg_vis_time = vis_time / vis_ticks;
+			G::avg_vis_time = vis_time / vis_ticks;
 			vis_time = 0;
 			vis_ticks = 0;
 		}
@@ -413,7 +413,6 @@ void PopMenuStyle() {
 
 int frames = 0;
 float frame_time = 0.f;
-float avg_frame_time = 0.f;
 
 INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
@@ -550,6 +549,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	console_font = io.Fonts->AddFontFromFileTTF("assets\\default_font.ttf");
 	menu_font = io.Fonts->AddFontFromFileTTF("assets\\menu_font.ttf");
 	G::default_font = console_font;
+	G::menu_font = menu_font;
 	io_ptr = &io;
 
 	for (int i = 0; i < 58; i++)
@@ -563,10 +563,12 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	Modular::AddRenderEventHandler(Reader::OnRender);
 	Modular::AddRenderEventHandler(Misc::OnRender);
 	Modular::AddRenderEventHandler(ESP::OnRender);
+	Modular::AddRenderEventHandler(HUD::OnRender);
 
 	Modular::AddTickEventHandler(Reader::OnTick);
 	Modular::AddTickEventHandler(Aimbot::OnTick);
 	Modular::AddTickEventHandler(Misc::OnTick);
+	Modular::AddTickEventHandler(HUD::OnTick);
 
 	Modular::AddKeyEventHandler(&G::S.menu_key, [window, &io](bool pressed) {
 		if (pressed) {
@@ -577,9 +579,11 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	//load offsets
 	std::thread offset_parse_thread(op);
+	float last_frame_time = 0.f;
 
 	while (running) {
 		auto t_start = std::chrono::high_resolution_clock::now();
+		auto frame_start = std::chrono::high_resolution_clock::now();
 
 		MSG msg;
 		while (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
@@ -648,6 +652,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		if (setup) {
 			RenderEvent event;
 			event.drawList = drawList;
+			event.last_draw_time = last_frame_time / 1000.f;
 			Modular::CallRenderEvent(event);
 		}
 
@@ -727,6 +732,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("3D Box"))
 					{
 						ImGui::Checkbox("3D Box", &G::S.boxEsp);
+						ImGui::SliderFloat("Line Width", &G::S.boxEspWidth, 1.f, 10.f);
 						ColorPicker(&G::S.boxColor);
 						ImGui::EndMenu();
 					}
@@ -740,6 +746,64 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::Checkbox("Absolute Text Size?", &G::S.absolute_text_size);
 					ImGui::Checkbox("Show only if visible", &G::S.espOnlyWhenVisible);
 					ImGui::Checkbox("Show only nearest info", &G::S.show_only_nearest_info);
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("HUD")) {
+					ImGui::SeparatorText("Music / Media");
+					ImGui::Checkbox("Enable", &G::S.spotify_module);
+					ImGui::SliderFloat("Gradient Speed", &G::S.spotify_module_gradient_speed, 0.f, 10.f);
+
+					ImGui::SliderFloat("X", &G::S.spotify_module_pos.x, 0, G::windowSize.x);
+					ImGui::SliderFloat("Y", &G::S.spotify_module_pos.y, 0, G::windowSize.y);
+
+					ImGui::SliderFloat("Font Size", &G::S.spotify_module_font_size, 5.f, 50.f, "%.0fpt");
+
+					if (ImGui::BeginMenu("Gradient Color 1")) {
+						ColorPicker(&G::S.spotify_module_color_start);
+						ImGui::EndMenu();
+					}
+
+					if (ImGui::BeginMenu("Gradient Color 2")) {
+						ColorPicker(&G::S.spotify_module_color_end);
+						ImGui::EndMenu();
+					}
+
+					if (ImGui::BeginMenu("Background")) {
+						ColorPicker(&G::S.spotify_module_bg_color);
+						ImGui::EndMenu();
+					}
+
+					ImGui::PushID(1);
+
+					ImGui::SeparatorText("FPS");
+					ImGui::Checkbox("Enable", &G::S.fps_module);
+					ImGui::Checkbox("Also Display Tickspeed", &G::S.fps_module_tickspeed);
+					ImGui::Checkbox("Also Display VisTickspeed", &G::S.fps_module_vistickspeed);
+					ImGui::SliderFloat("Gradient Speed", &G::S.fps_module_gradient_speed, 0.f, 10.f);
+
+					ImGui::SliderFloat("X", &G::S.fps_module_pos.x, 0, G::windowSize.x);
+					ImGui::SliderFloat("Y", &G::S.fps_module_pos.y, 0, G::windowSize.y);
+
+					ImGui::SliderFloat("Font Size", &G::S.fps_module_font_size, 5.f, 50.f, "%.0fpt");
+
+					if (ImGui::BeginMenu("Gradient Color 1")) {
+						ColorPicker(&G::S.fps_module_color_start);
+						ImGui::EndMenu();
+					}
+
+					if (ImGui::BeginMenu("Gradient Color 2")) {
+						ColorPicker(&G::S.fps_module_color_end);
+						ImGui::EndMenu();
+					}
+
+					if (ImGui::BeginMenu("Background")) {
+						ColorPicker(&G::S.fps_module_bg_color);
+						ImGui::EndMenu();
+					}
+
+					ImGui::PopID();
+
 					ImGui::EndTabItem();
 				}
 
@@ -935,13 +999,13 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 					ImGui::SeparatorText("Frame Timing");
 
-					DebugStat("Time per Frame: ", avg_frame_time, "ms");
-					DebugStat("Frames per Second: ", (int)(1000 / avg_frame_time), "f/s");
+					DebugStat("Time per Frame: ", G::avg_frame_time, "ms");
+					DebugStat("Frames per Second: ", (int)(1000 / G::avg_frame_time), "f/s");
 
 					ImGui::SeparatorText("Collision Detection");
 
-					DebugStat("Time per VisTick: ", avg_vis_time, "ms");
-					DebugStat("VisTicks per Second: ", (int)(1000 / avg_vis_time), "vt/s");
+					DebugStat("Time per VisTick: ", G::avg_vis_time, "ms");
+					DebugStat("VisTicks per Second: ", (int)(1000 / G::avg_vis_time), "vt/s");
 
 					ImGui::SeparatorText("Velocity");
 
@@ -982,22 +1046,25 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 		double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
 
+		float to_sleep = 0.f;
+		if (!G::S.vsync && G::S.frame_cap >= 10) {
+			to_sleep = 1000.f / G::S.frame_cap;
+			to_sleep -= elapsed_time_ms;
+			std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(to_sleep));
+		}
+
+		last_frame_time = elapsed_time_ms;
+
 		if (console_show > 0) {
-			console_show -= (int)elapsed_time_ms;
+			console_show -= (int)last_frame_time;
 		}
 
 		frames++;
-		frame_time += elapsed_time_ms;
+		frame_time += last_frame_time + to_sleep;
 		if (frame_time > 1000) {
-			avg_frame_time = frame_time / frames;
+			G::avg_frame_time = frame_time / frames;
 			frame_time = 0;
 			frames = 0;
-		}
-
-		if (!G::S.vsync) {
-			float to_sleep = 1000.f / G::S.frame_cap;
-			to_sleep -= elapsed_time_ms;
-			std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(to_sleep));
 		}
 	}
 

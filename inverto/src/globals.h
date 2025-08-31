@@ -72,6 +72,7 @@ public:
     bool radarHack = true;
     bool ignoreVisible = false;
     bool boxEsp = true;
+    float boxEspWidth = 1.f;
     bool chams = true;
     float chamsWidth = 2.f;
     bool espOnlyWhenVisible = false;
@@ -92,7 +93,24 @@ public:
 
     bool vsync = true;
     int frame_cap = 100;
-    int visibility_thread_n = 1;
+    
+    bool spotify_module = false;
+    float spotify_module_gradient_speed = 1.f;
+    ImColor spotify_module_color_start = ImColor(255, 0, 255);
+    ImColor spotify_module_color_end = ImColor(255, 255, 255);
+    ImVec2 spotify_module_pos = { 10, 1000 };
+    float spotify_module_font_size = 20.f;
+    ImColor spotify_module_bg_color = ImColor(0, 0, 0, 128);
+
+    bool fps_module = false;
+    bool fps_module_tickspeed = true;
+    bool fps_module_vistickspeed = true;
+    float fps_module_gradient_speed = 1.f;
+    ImColor fps_module_color_start = ImColor(255, 0, 255);
+    ImColor fps_module_color_end = ImColor(255, 255, 255);
+    ImVec2 fps_module_pos = { 10, 1000 };
+    float fps_module_font_size = 20.f;
+    ImColor fps_module_bg_color = ImColor(0, 0, 0, 128);
 };
 
 class Theme {
@@ -187,6 +205,7 @@ namespace G {
 	Entity nearest_player;
 	Entity render_nearest_player;
 	ImFont* default_font;
+    ImFont* menu_font;
 
 	float fov = 90.f;
 	bool shoot = false;
@@ -200,19 +219,14 @@ namespace G {
     std::vector<Triangle> triangles_loaded;
 
     bool use_AVX_512 = false;
+    float avg_frame_time = 0.f;
+    float avg_vis_time = 0.f;
 
 	Settings S{};
     Theme T{};
 }
 
 int console_show = 0;
-
-template <class T>
-std::string str(T obj) {
-	std::ostringstream os;
-	os << obj;
-	return os.str();
-}
 
 void send_console_message(std::string content, ImColor color)
 {
@@ -893,10 +907,10 @@ void draw3dBoxAroundLine(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vec
                 continue;
             }
 
-            drawList->AddLine(last_point.toVec2(), pt.toVec2(), color, G::S.width);
+            drawList->AddLine(last_point.toVec2(), pt.toVec2(), color, G::S.boxEspWidth);
             last_point = pt;
         }
-        drawList->AddLine(last_point.toVec2(), o_points[0].toVec2(), color, G::S.width);
+        drawList->AddLine(last_point.toVec2(), o_points[0].toVec2(), color, G::S.boxEspWidth);
     }
 }
 
