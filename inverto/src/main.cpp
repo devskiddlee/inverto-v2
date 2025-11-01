@@ -219,6 +219,7 @@ void op() {
 	G::offsets.gameRules = getOffset("dwGameRules", off);
 	G::offsets.globalVars = getOffset("dwGlobalVars", off);
 	G::offsets.playerpawn = getOffset("CCSPlayerController->m_hPlayerPawn", off);
+	G::offsets.m_nKillCount = getOffset("CCSPlayerController->m_nKillCount", off);
 
 	G::offsets.eyeAngles = getOffset("C_CSPlayerPawn->m_angEyeAngles", off);
 	G::offsets.teamNum = getOffset("C_BaseEntity->m_iTeamNum", off);
@@ -238,7 +239,7 @@ void op() {
 	G::offsets.scoped = getOffset("C_CSPlayerPawn->m_bIsScoped", off);
 	G::offsets.fov = getOffset("CCSPlayerBase_CameraServices->m_iFOV", off);
 	G::offsets.absVelocity = getOffset("C_BaseEntity->m_vecAbsVelocity", off);
-	G::offsets.IDEntIndex = getOffset("C_CSPlayerPawnBase->m_iIDEntIndex", off);
+	G::offsets.IDEntIndex = getOffset("C_CSPlayerPawn->m_iIDEntIndex", off);
 
 	G::offsets.playersAliveCT = getOffset("C_CSPlayerPawn->m_nLastKillerIndex", off);
 	G::offsets.playersAliveT = getOffset("C_CSPlayerPawn->m_flHitHeading", off);
@@ -257,9 +258,15 @@ void op() {
 
 	G::offsets.actionTrackingServices = getOffset("CCSPlayerController->m_pActionTrackingServices", off);
 	G::offsets.damageDealt = getOffset("CCSPlayerController_ActionTrackingServices->m_unTotalRoundDamageDealt", off);
+	G::offsets.m_matchStats = getOffset("CCSPlayerController_ActionTrackingServices->m_matchStats", off);
 	G::offsets.m_bInReload = getOffset("C_CSWeaponBase->m_bInReload", off);
 
 	G::offsets.m_flFlashOverlayAlpha = getOffset("C_CSPlayerPawnBase->m_flFlashOverlayAlpha", off);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+	confirm("All offsets have been loaded!");
+	highlight("");
 
 	if (!CheckConfig("default") || debug) {
 		warning("Default Config not found... creating one...");
@@ -275,8 +282,6 @@ void op() {
 
 	ReadTheme("default");
 
-	Modular::StartTickLoop();
-
 	map_parser_thread = std::thread{ map_parse_loop };
 	enemy_visibility_thread = std::thread{ enemy_visibility_loop };
 
@@ -284,6 +289,8 @@ void op() {
 		warning("AVX-512 not supported on your CPU, fallback to AVX2");
 	else
 		G::use_AVX_512 = true;
+
+	Modular::StartTickLoop();
 
 	setup = true;
 }
@@ -564,11 +571,13 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	Modular::AddRenderEventHandler(Misc::OnRender);
 	Modular::AddRenderEventHandler(ESP::OnRender);
 	Modular::AddRenderEventHandler(HUD::OnRender);
+	Modular::AddRenderEventHandler(GameEvents::OnRender);
 
 	Modular::AddTickEventHandler(Reader::OnTick);
 	Modular::AddTickEventHandler(Aimbot::OnTick);
 	Modular::AddTickEventHandler(Misc::OnTick);
 	Modular::AddTickEventHandler(HUD::OnTick);
+	Modular::AddTickEventHandler(GameEvents::OnTick);
 
 	Modular::AddKeyEventHandler(&G::S.menu_key, [window, &io](bool pressed) {
 		if (pressed) {
@@ -580,6 +589,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	//load offsets
 	std::thread offset_parse_thread(op);
 	float last_frame_time = 0.f;
+	float gradient_offset = 1.f;
+	std::string last_offset_update = "";
 
 	while (running) {
 		auto t_start = std::chrono::high_resolution_clock::now();
@@ -604,8 +615,10 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
-		if (!setup && OP::offset_parse_operation_update != "")
+		if (!setup && OP::offset_parse_operation_update != "" && OP::offset_parse_operation_update != last_offset_update) {
 			info(OP::offset_parse_operation_update);
+			last_offset_update = OP::offset_parse_operation_update;
+		}
 
 		if (console_show > 0) {
 			int current_y = 100;
@@ -661,7 +674,29 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 			ImGui::PushFont(menu_font, G::T.menu_fontSize);
 
-			ImGui::Begin("inverto");
+			ImVec2 title_pos;
+			ImGui::Begin(" ", 0, 0, &title_pos);
+
+			ImDrawList* windowDrawList = ImGui::GetForegroundDrawList();
+
+			ImColor title_color = G::T.Colors[ImGuiCol_Text];
+
+			ImColor end;
+			if (G::S.fancy_title)
+				end = ContrastBrightnessHSV(title_color);
+			else
+				end = title_color;
+
+			DrawGradientText(
+				"inverto",
+				title_pos,
+				title_color,
+				end,
+				gradient_offset,
+				G::menu_font,
+				G::T.menu_fontSize,
+				windowDrawList
+			);
 
 			if (ImGui::BeginTabBar("Tabs"))
 			{
@@ -750,7 +785,21 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 				}
 
 				if (ImGui::BeginTabItem("HUD")) {
-					ImGui::SeparatorText("Music / Media");
+					
+					ImGui::PushID(1);
+					ImGui::SeparatorText("Kill Animation");
+
+					ImGui::Checkbox("Enable", &G::S.kill_animation);
+					ImGui::SliderFloat("Duration", &G::S.kill_animation_duration, 0.1f, 5.f, "%.1f seconds");
+					ImGui::SliderInt("Size", &G::S.kill_animation_size, 5, 100, "%dpx");
+					if (ImGui::BeginMenu("Color")) {
+						ColorPicker(&G::S.kill_animation_color);
+						ImGui::EndMenu();
+					}
+					ImGui::PopID();
+
+					ImGui::PushID(2);
+					ImGui::SeparatorText("Music / Media Module");
 					ImGui::Checkbox("Enable", &G::S.spotify_module);
 					ImGui::SliderFloat("Gradient Speed", &G::S.spotify_module_gradient_speed, 0.f, 10.f);
 
@@ -773,10 +822,10 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						ColorPicker(&G::S.spotify_module_bg_color);
 						ImGui::EndMenu();
 					}
+					ImGui::PopID();
 
-					ImGui::PushID(1);
-
-					ImGui::SeparatorText("FPS");
+					ImGui::PushID(3);
+					ImGui::SeparatorText("FPS Module");
 					ImGui::Checkbox("Enable", &G::S.fps_module);
 					ImGui::Checkbox("Also Display Tickspeed", &G::S.fps_module_tickspeed);
 					ImGui::Checkbox("Also Display VisTickspeed", &G::S.fps_module_vistickspeed);
@@ -923,6 +972,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 					ImGui::SeparatorText("Edit UI Settings");
 
+					ImGui::Checkbox("Fancy Title", &G::S.fancy_title);
 					ImGui::SliderInt("Font Size", &G::T.menu_fontSize, 5, 50, "%dpt");
 					ImGui::SliderFloat("Frame Rounding", &G::T.menu_frameRounding, 0.f, 20.f);
 					ImGui::SliderFloat("Window Rounding", &G::T.menu_windowRounding, 0.f, 20.f);
@@ -1021,6 +1071,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 					ImGui::EndTabItem();
 				}
+
 			}
 
 			PopMenuStyle();
@@ -1066,6 +1117,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			frame_time = 0;
 			frames = 0;
 		}
+
+		gradient_offset -= last_frame_time / 1000.f;
+		if (gradient_offset < 0.f) gradient_offset = 1.f;
 	}
 
 	map_parser_thread.detach();

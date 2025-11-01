@@ -93,6 +93,7 @@ public:
 
     bool vsync = true;
     int frame_cap = 100;
+    bool fancy_title = true;
     
     bool spotify_module = false;
     float spotify_module_gradient_speed = 1.f;
@@ -111,6 +112,11 @@ public:
     ImVec2 fps_module_pos = { 10, 1000 };
     float fps_module_font_size = 20.f;
     ImColor fps_module_bg_color = ImColor(0, 0, 0, 128);
+
+    bool kill_animation = true;
+    float kill_animation_duration = 1.f;
+    int kill_animation_size = 50;
+    ImColor kill_animation_color = ImColor(255, 0, 255);
 };
 
 class Theme {
@@ -771,6 +777,27 @@ public:
     uint64_t m_uCurrentMap; //0x0178
     uint64_t m_uCurrentMapName; //0x0180
 }; //Size: 0x0188
+
+struct CSMatchStats {
+    char pad1[0x30];
+    int32_t	kills;
+    int32_t	deaths;
+    int32_t	assists;
+    int32_t	damage;
+    int32_t	equipmentValue;
+    int32_t	moneySaved;
+    int32_t	killReward;
+    int32_t	liveTime;
+    int32_t	headShotKills;
+    int32_t	objective;
+    int32_t	cashEarned;
+    int32_t	utilityDamage;
+    int32_t	enemiesFlashed;
+    char pad2[0x4];
+    int32_t enemy5Ks;
+    int32_t enemy4Ks;
+    int32_t enemy3Ks;
+};
 
 std::vector<Vector> GetConvexHull(std::vector<Vector>& points) {
     if (points.size() <= 1) return points;

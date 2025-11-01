@@ -55,4 +55,6 @@ public:
 	int damageDealt = 0;
 	int m_bInReload = 0;
 	int m_flFlashOverlayAlpha = 0;
+	int m_nKillCount = 0;
+	int m_matchStats = 0;
 };

@@ -573,8 +573,10 @@ const char* ImGuiColToString(ImGuiCol col)
 	}
 }
 
-void DrawGradientText(const char* text, ImVec2 pos, ImU32 colorStart, ImU32 colorEnd, float gradientOffset, ImFont* font, float fontSize) {
+void DrawGradientText(const char* text, ImVec2 pos, ImU32 colorStart, ImU32 colorEnd, float gradientOffset, ImFont* font, float fontSize, ImDrawList* customDrawList = nullptr) {
 	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+	if (customDrawList != nullptr) drawList = customDrawList;
+
 	int len = strlen(text);
 
 	int visibleCount = 0;
@@ -605,4 +607,15 @@ void DrawGradientText(const char* text, ImVec2 pos, ImU32 colorStart, ImU32 colo
 
 		cursorPos.x += charWidth;
 	}
+}
+
+ImColor ContrastBrightnessHSV(const ImColor& col)
+{
+	float h, s, v;
+	ImGui::ColorConvertRGBtoHSV(col.Value.x, col.Value.y, col.Value.z, h, s, v);
+	v = fmodf(v + 0.5f, 1.f);
+	ImVec4 out;
+	ImGui::ColorConvertHSVtoRGB(h, s, v, out.x, out.y, out.z);
+	out.w = col.Value.w;
+	return ImColor(out);
 }

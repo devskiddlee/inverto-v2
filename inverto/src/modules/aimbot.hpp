@@ -93,9 +93,6 @@ void aim_and_shoot(Entity e, float speed) {
 		if ((G::localPlayer.absVelocity.z > 1 || G::localPlayer.absVelocity.z < -1) && G::S.jumpShotHack && G::weaponName == "weapon_ssg08")
 			return;
 
-		if (G::S.onlyShootWhenStill && G::localPlayer.absVelocity.length() > 50.f)
-			return;
-
 		G::shoot = true;
 	}
 }

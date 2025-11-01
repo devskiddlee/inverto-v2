@@ -135,6 +135,12 @@ void shoot_tick(float dt) {
 				revolver = 200;
 			}
 
+			if (G::S.onlyShootWhenStill && G::localPlayer.absVelocity.length() > 75.f) {
+				G::shoot = false;
+				free_to_shoot = true;
+				return;
+			}
+
 			mouse_event(0x0002, 0, 0, 0, GetMessageExtraInfo());
 
 			Modular::ScheduleDelayedTask(10.f + rand() % 11 + revolver, "release_shoot_btn", [](TickEvent event) {

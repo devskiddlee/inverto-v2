@@ -56,7 +56,7 @@ void UpdateEntities(std::list<Entity>& entities)
 
 	for (int i = 0; i < 64; i++)
 	{
-		uintptr_t currController = G::memory.Read<uintptr_t>(listEntry + i * 0x78);
+		uintptr_t currController = G::memory.Read<uintptr_t>(listEntry + i * 0x70);
 		if (!currController) continue;
 
 		int pawnHandle = G::memory.Read<int>(currController + G::offsets.playerpawn);
@@ -65,7 +65,7 @@ void UpdateEntities(std::list<Entity>& entities)
 		uintptr_t listEntry2 = G::memory.Read<uintptr_t>(entityList + 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10);
 		if (!listEntry2) continue;
 
-		uintptr_t currPawn = G::memory.Read<uintptr_t>(listEntry2 + 0x78 * (pawnHandle & 0x1FF));
+		uintptr_t currPawn = G::memory.Read<uintptr_t>(listEntry2 + 0x70 * (pawnHandle & 0x1FF));
 		if (!currPawn) continue;
 
 		Entity entity;
