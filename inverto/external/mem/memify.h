@@ -15,40 +15,14 @@ Besides that, enjoy!
 // 5% according to the post below:
 // unknowncheats.me/forum/general-programming-and-reversing/230813-readprocessmemory-vs-ntreadvirtualmemory-performance-benchmark-comparison.html
 typedef NTSTATUS(WINAPI* pNtReadVirtualMemory)(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToRead, PULONG NumberOfBytesRead);
-typedef NTSTATUS(WINAPI* pNtWriteVirtualMemory)(HANDLE Processhandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten);
 
 class memify
 {
 private:
-	// initalize at 0 so we can check later
 	HANDLE handle = 0;
 	DWORD processID = 0;
 
-	// define Virtual Read + Virtual Write
-	pNtReadVirtualMemory VRead; 
-	pNtWriteVirtualMemory VWrite;
-
-	/*
-	uintptr_t GetProcessId(std::string_view processName)
-	{
-		// define processentry32
-		PROCESSENTRY32 pe;
-		pe.dwSize = sizeof(PROCESSENTRY32);
-
-		// create a snapshot handle
-		HANDLE ss = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-
-		// loop through all process
-		while (Process32Next(ss, &pe)) {
-			std::cout << (char*)pe.szExeFile;
-			// compare program names to processName
-			if (processName.compare((char*)pe.szExeFile)) {
-				processID = pe.th32ProcessID;
-				std::cout << "Found cs2 at " << processID;
-				return processID;
-			}
-		}
-	}*/
+	pNtReadVirtualMemory VRead;
 
 	uintptr_t GetProcessId(std::string process_name) noexcept {
 
@@ -112,7 +86,6 @@ public:
 			exit(0);
 
 		VRead = (pNtReadVirtualMemory)GetProcAddress(ntdll, "NtReadVirtualMemory");
-		VWrite = (pNtWriteVirtualMemory)GetProcAddress(ntdll, "NtWriteVirtualMemory");
 
 		for (auto& name : processes) {
 			processID = (DWORD)GetProcessId(name);
@@ -140,7 +113,6 @@ public:
 			exit(0);
 
 		VRead = (pNtReadVirtualMemory)GetProcAddress(ntdll, "NtReadVirtualMemory");
-		VWrite = (pNtWriteVirtualMemory)GetProcAddress(ntdll, "NtWriteVirtualMemory");
 
 		processID = (DWORD)GetProcessId(processName);
 
@@ -175,13 +147,6 @@ public:
 		return buffer;
 	}
 
-	template <typename T>
-	T Write(uintptr_t address, T value)
-	{
-		VWrite(handle, (void*)address, &value, sizeof(T), NULL);
-		return value;
-	}
-
 	// for reading structs and strings and shit
 	bool ReadRaw(uintptr_t address, void* buffer, size_t size)
 	{
@@ -197,5 +162,9 @@ public:
 	bool ProcessIsOpen(const std::string processName)
 	{
 		return GetProcessId(processName) != 0;
+	}
+
+	DWORD GetProcessID() const {
+		return processID;
 	}
 };

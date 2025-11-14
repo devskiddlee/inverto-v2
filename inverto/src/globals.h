@@ -117,6 +117,8 @@ public:
     float kill_animation_duration = 1.f;
     int kill_animation_size = 50;
     ImColor kill_animation_color = ImColor(255, 0, 255);
+
+    bool thorough_vis_check = true;
 };
 
 class Theme {
@@ -777,6 +779,7 @@ public:
     uint64_t m_uCurrentMap; //0x0178
     uint64_t m_uCurrentMapName; //0x0180
 }; //Size: 0x0188
+
 
 struct CSMatchStats {
     char pad1[0x30];

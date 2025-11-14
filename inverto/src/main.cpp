@@ -11,6 +11,20 @@ bool debug = false;
 bool debug_map = false;
 bool setup = false;
 
+HWND cs2_hwnd = NULL;
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
+	DWORD windowPid = 0;
+	GetWindowThreadProcessId(hwnd, &windowPid);
+
+	if (windowPid == (DWORD)lParam) {
+		if (GetWindow(hwnd, GW_OWNER) == NULL && IsWindowVisible(hwnd)) {
+			cs2_hwnd = hwnd;
+			return FALSE;
+		}
+	}
+	return TRUE;
+};
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {
@@ -101,7 +115,7 @@ void map_parse_loop() {
 			if (debug_map) lastMapName = "de_inferno";
 
 			if (!std::filesystem::exists("assets\\maps\\" + lastMapName + ".tri")) {
-				if (lastMapName != "" && lastMapName != "<empty>")
+				if (lastMapName != "" && lastMapName != "<empty>" && lastMapName.find("_") != std::string::npos)
 					warning("Current Map '" + lastMapName + "' could not be loaded, this may affect some features.");
 				continue;
 			}
@@ -150,8 +164,9 @@ float vis_time = 0.f;
 void enemy_visibility_loop(){
 	while (enemy_visibility_thread.joinable()) {
 		auto start = std::chrono::high_resolution_clock::now();
+		bool invalid_map = G::triangles_loaded.size() == 0;
 
-		if (G::triangles_loaded.size() == 0) {
+		if (invalid_map && !G::S.thorough_vis_check) {
 			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(50));
 			continue;
 		}
@@ -170,27 +185,31 @@ void enemy_visibility_loop(){
 			Vector E = e.head;
 			if (debug_map) S = Vector(100.f, 100.f, 100.f);
 
-			bool hit;
-			if (G::use_AVX_512) {
-				hit = anyHitAVX512(
-					{ S.x, S.y, S.z },
-					{ E.x, E.y, E.z },
-					loaded_triangles_p1,
-					loaded_triangles_p2,
-					loaded_triangles_p3
-				);
-			}
-			else {
-				hit = anyHitSIMD(
-					{ S.x, S.y, S.z },
-					{ E.x, E.y, E.z },
-					loaded_triangles_p1,
-					loaded_triangles_p2,
-					loaded_triangles_p3
-				);
+			bool hit = false;
+			if (!invalid_map) {
+				if (G::use_AVX_512) {
+					hit = anyHitAVX512(
+						{ S.x, S.y, S.z },
+						{ E.x, E.y, E.z },
+						loaded_triangles_p1,
+						loaded_triangles_p2,
+						loaded_triangles_p3
+					);
+				}
+				else {
+					hit = anyHitSIMD(
+						{ S.x, S.y, S.z },
+						{ E.x, E.y, E.z },
+						loaded_triangles_p1,
+						loaded_triangles_p2,
+						loaded_triangles_p3
+					);
+				}
 			}
 
-			G::visibleMap[e.id] = !hit;
+			bool thorough = G::memory.Read<bool>(e.address + G::offsets.spottedState + G::offsets.spotted);
+
+			G::visibleMap[e.id] = !hit && (thorough || !G::S.thorough_vis_check);
 		}
 
 		auto end = std::chrono::high_resolution_clock::now();
@@ -443,6 +462,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		return 0;
 	}
 
+	EnumWindows(EnumWindowsProc, G::memory.GetProcessID());
 	G::client = G::memory.GetBase("client.dll");
 
 	WNDCLASSEX wc{};
@@ -615,6 +635,10 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 
+		bool cs2_focused = (GetForegroundWindow() == cs2_hwnd) || (GetForegroundWindow() == window);
+		if (!cs2_focused)
+			goto jmp_frame_end;
+
 		if (!setup && OP::offset_parse_operation_update != "" && OP::offset_parse_operation_update != last_offset_update) {
 			info(OP::offset_parse_operation_update);
 			last_offset_update = OP::offset_parse_operation_update;
@@ -666,7 +690,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			RenderEvent event;
 			event.drawList = drawList;
 			event.last_draw_time = last_frame_time / 1000.f;
-			Modular::CallRenderEvent(event);
+			if (cs2_focused)
+				Modular::CallRenderEvent(event);
 		}
 
 		if (G::render_ui) {
@@ -703,6 +728,10 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 				if (ImGui::BeginTabItem("General"))
 				{
 					ImGui::Checkbox("Aimbot", &G::S.aimbot);
+					ImGui::Checkbox("Thorough Visibility Check", &G::S.thorough_vis_check);
+					ImGui::TextColored(ImColor(255, 0, 255), "INFO");
+					ImGui::SameLine();
+					ImGui::TextWrapped("This option will account for smokes, unsupported maps etc., because it checks the CS2 Map Visiblity Status of a player, this will add a slight delay");
 					ImGui::Checkbox("Ignore Visibility Check", &G::S.ignoreVisible);
 					ImGui::Checkbox("Auto-Aim when Visible?", &G::S.autoAimWhenVisible);
 					if (!G::S.disableAngleDiff)
@@ -1079,6 +1108,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			ImGui::EndTabBar();
 			ImGui::End();
 		}
+
+		jmp_frame_end:
 
 		ImGui::Render();
 
