@@ -92,7 +92,7 @@ void esp_logic(Entity& entity, ImDrawList* drawList, int index, int max) {
 		double s = sin(angle);
 
 		float size = 15.f;
-		draw3dBoxAroundLine(drawList, currentVM, entity.origin, entity.head.copy() + Vector(0, 0, 10), c, s, size);
+		draw3dBoxAroundLine(drawList, currentVM, entity.origin, entity.head.copy() + Vector(0, 0, 10), c, s, size, G::S.boxEspWidth, G::S.boxColor);
 	}
 
 	if (G::S.chams) {

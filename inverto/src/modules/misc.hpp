@@ -254,6 +254,10 @@ public:
 			flashbang_color_vec.w = get_flashbang_alpha();
 			ImColor flashbang_color = flashbang_color_vec;
 			event.drawList->AddRectFilled(ImVec2(0, 0), G::windowSize.toVec2(), flashbang_color);
+			event.drawList->AddCircle(G::windowCenter.toVec2(), 6.f, ImColor(1.f, 1.f, 1.f, flashbang_color_vec.w), 0, 2.f);
+
+			if (flashbang_color_vec.w > 0.5f && G::S.anti_flashbang_world_render)
+				RenderWorldInRadius(event.drawList, G::S.anti_flashbang_world_render_radius);
 		}
 
 		if (G::S.showVelocity) {

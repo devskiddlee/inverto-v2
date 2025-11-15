@@ -14,6 +14,28 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Control.h>
 
+void SetWindowInteractivity(HWND hwnd, bool interactive)
+{
+	LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+	if (interactive)
+	{
+		exStyle &= ~WS_EX_TRANSPARENT;
+	}
+	else
+	{
+		exStyle |= WS_EX_TRANSPARENT;
+	}
+
+	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+	if (interactive)
+	{
+		SetForegroundWindow(hwnd);
+		SetFocus(hwnd);
+	}
+}
+
 template <class T>
 std::string str(T obj) {
 	std::ostringstream os;

@@ -10,7 +10,7 @@ private:
 	}
 public:
 	static void OnTick(TickEvent event) {
-		uintptr_t ats = G::memory.Read<uintptr_t>(G::localPlayerController + G::offsets.actionTrackingServices);
+		uintptr_t ats = G::memory.Read<uintptr_t>(G::localPlayerController + G::offsets.m_pActionTrackingServices);
 		CSMatchStats stats = G::memory.Read<CSMatchStats>(ats + G::offsets.m_matchStats);
 		int kill_count = stats.kills;
 

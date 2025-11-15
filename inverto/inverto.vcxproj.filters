@@ -143,7 +143,7 @@
     <ClInclude Include="src\offset_parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\modules\bell_player.hpp">
+    <ClInclude Include="src\modules\game_events.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="external\CGAL\AABB_tree\internal\AABB_drawing_traits.h">
@@ -42555,6 +42555,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\modules\hud.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\modules\quick_toggle.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\modules\planted_c4.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

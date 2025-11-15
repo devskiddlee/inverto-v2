@@ -4,6 +4,57 @@
 #include "utils.hpp"
 #include "modular.h"
 
+#undef min
+
+// might change later on
+int fuzzy_score(const std::string& pattern, const std::string& text, size_t* failed = nullptr) {
+    if (pattern.empty()) return 0;
+
+    int score = 0;
+    int consecutive = 0;
+    int bonus = 0;
+    size_t p = 0;
+
+    for (size_t t = 0; t < text.size() && p < pattern.size(); t++) {
+        if (std::tolower(text[t]) == std::tolower(pattern[p])) {
+            int s = 1;
+
+            if (consecutive > 0) {
+                s += 5;
+            }
+
+            if (t == 0 || text[t - 1] == '_' || text[t - 1] == '-' || text[t - 1] == ' ') {
+                s += 8;
+            }
+
+            if (std::isupper(text[t]) && std::islower(text[t - 1])) {
+                s += 3;
+            }
+
+            score += s;
+            consecutive++;
+            p++;
+        }
+        else {
+            consecutive = 0;
+        }
+    }
+
+    if (p != pattern.size()) {
+        if (failed) (*failed)++;
+        return std::numeric_limits<int>::min();
+    }
+
+    return score;
+}
+
+void sort_by_fuzzy_score(std::vector<std::string>& items, const std::string& target) {
+    std::sort(items.begin(), items.end(),
+        [&](const std::string& a, const std::string& b) {
+            return fuzzy_score(target, a) > fuzzy_score(target, b);
+        });
+}
+
 struct console_message {
 	std::string content;
 	ImColor color;
@@ -119,6 +170,16 @@ public:
     ImColor kill_animation_color = ImColor(255, 0, 255);
 
     bool thorough_vis_check = true;
+
+    int QUICK_TOGGLE_HOTKEY = VK_END;
+
+    bool c4_esp = true;
+    ImColor c4_color = ImColor(255, 0, 0, 128);
+    float c4_line_width = 1.f;
+    bool c4_cross = true;
+
+    bool anti_flashbang_world_render = true;
+    float anti_flashbang_world_render_radius = 250.f;
 };
 
 class Theme {
@@ -161,13 +222,14 @@ struct Triangle {
         return t > FLT_EPSILON && t < 1.0;
     }
 
-    std::vector<ImVec2> to_screen(ViewMatrix currentVM) {
+    std::vector<ImVec2> to_screen(ViewMatrix currentVM, bool* success = nullptr) {
         Vector sp1(-10000, -10000, 0);
         Vector sp2(-10000, -10000, 0);
         Vector sp3(-10000, -10000, 0);
-        world_to_screen(p1, sp1, currentVM);
-        world_to_screen(p2, sp2, currentVM);
-        world_to_screen(p3, sp3, currentVM);
+        bool b1 = world_to_screen(p1, sp1, currentVM);
+        bool b2 = world_to_screen(p2, sp2, currentVM);
+        bool b3 = world_to_screen(p3, sp3, currentVM);
+        if (success) *success = b1 && b2 && b3;
         return { sp1.toVec2(), sp2.toVec2(), sp3.toVec2() };
     }
 };
@@ -230,8 +292,71 @@ namespace G {
     float avg_frame_time = 0.f;
     float avg_vis_time = 0.f;
 
+    bool quick_toggle_enabled = false;
+
+    HWND window = 0;
+
 	Settings S{};
     Theme T{};
+}
+
+void PushMenuStyle() {
+    for (int i = 0; i < 58; i++)
+        ImGui::PushStyleColor(i, G::T.Colors[i]);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, G::T.menu_windowRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, G::T.menu_frameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, G::T.menu_frameRounding);
+}
+
+void PopMenuStyle() {
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(58);
+}
+
+void RenderWorldInRadius(ImDrawList* drawList, float min, float max) {
+    ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);
+    for (Triangle& T : G::triangles_loaded) {
+        if (CalcMagnitude(T.p1, G::localPlayer.head) > max) continue;
+        if (CalcMagnitude(T.p2, G::localPlayer.head) > max) continue;
+        if (CalcMagnitude(T.p3, G::localPlayer.head) > max) continue;
+
+        if (CalcMagnitude(T.p1, G::localPlayer.head) < min) continue;
+        if (CalcMagnitude(T.p2, G::localPlayer.head) < min) continue;
+        if (CalcMagnitude(T.p3, G::localPlayer.head) < min) continue;
+
+        float x = (T.p1.x + T.p2.x + T.p3.x) / 3.f;
+        float y = (T.p1.y + T.p2.y + T.p3.y) / 3.f;
+        float z = (T.p1.z + T.p2.z + T.p3.z) / 3.f;
+        Vector pos(x, y, z);
+
+        float a = (CalcMagnitude(pos, G::localPlayer.head) - min) / max;
+        bool success = false;
+        std::vector<ImVec2> points = T.to_screen(currentVM, &success);
+        if (!success) continue;
+
+        drawList->AddTriangleFilled(points[0], points[1], points[2], ImColor(0.f, 0.f, 0.f, a));
+    }
+}
+
+void RenderWorldInRadius(ImDrawList* drawList, float max) {
+    ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);
+    for (Triangle& T : G::triangles_loaded) {
+        if (CalcMagnitude(T.p1, G::localPlayer.head) > max) continue;
+        if (CalcMagnitude(T.p2, G::localPlayer.head) > max) continue;
+        if (CalcMagnitude(T.p3, G::localPlayer.head) > max) continue;
+
+        float x = (T.p1.x + T.p2.x + T.p3.x) / 3.f;
+        float y = (T.p1.y + T.p2.y + T.p3.y) / 3.f;
+        float z = (T.p1.z + T.p2.z + T.p3.z) / 3.f;
+        Vector pos(x, y, z);
+
+        float a = CalcMagnitude(pos, G::localPlayer.head) / max;
+        bool success = false;
+        std::vector<ImVec2> points = T.to_screen(currentVM, &success);
+        if (!success) continue;
+
+        drawList->AddTriangleFilled(points[0], points[1], points[2], ImColor(0.f, 0.f, 0.f, std::fabs(a - 1.f)));
+    }
 }
 
 int console_show = 0;
@@ -272,6 +397,11 @@ void confirm(std::string msg) {
 bool IsPixelInsideScreen(Vector pixel)
 {
 	return pixel.x > 0 && pixel.x < G::windowSize.x && pixel.y > 0 && pixel.y < G::windowSize.y;
+}
+
+bool IsPixelInsideScreen(ImVec2 pixel)
+{
+    return pixel.x > 0 && pixel.x < G::windowSize.x && pixel.y > 0 && pixel.y < G::windowSize.y;
 }
 
 static const char* KeyNames[] = {
@@ -863,7 +993,48 @@ std::list<Vector> GetCuboidCorners(Vector start, Vector end, float width, float 
     return { p0, p1, p2, p3, p4, p5, p6, p7 };
 }
 
-void draw3dBoxAroundLine(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vector start, Vector end, double cos, double sin, float size, bool outline = true, bool straight = true)
+void draw3dCross(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vector pos, float size, float line_width, ImColor color) {
+    Vector v_x1 = pos.copy() + Vector(size, 0, 0);
+    Vector v_x2 = pos.copy() - Vector(size, 0, 0);
+
+    Vector v_y1 = pos.copy() + Vector(0, size, 0);
+    Vector v_y2 = pos.copy() - Vector(0, size, 0);
+
+    Vector v_z1 = pos.copy() + Vector(0, 0, size);
+    Vector v_z2 = pos.copy() - Vector(0, 0, size);
+
+    Vector p_x1;
+    world_to_screen(v_x1, p_x1, currentViewMatrix);
+    Vector p_x2;
+    world_to_screen(v_x2, p_x2, currentViewMatrix);
+
+    Vector p_y1;
+    world_to_screen(v_y1, p_y1, currentViewMatrix);
+    Vector p_y2;
+    world_to_screen(v_y2, p_y2, currentViewMatrix);
+
+    Vector p_z1;
+    world_to_screen(v_z1, p_z1, currentViewMatrix);
+    Vector p_z2;
+    world_to_screen(v_z2, p_z2, currentViewMatrix);
+
+    std::vector<Vector> points = { p_x1, p_x2, p_y1, p_y2, p_z1, p_z2 };
+
+    bool valid = true;
+
+    for (Vector pt : points)
+        if (!IsPixelInsideScreen(pt))
+            valid = false;
+
+    if (!valid)
+        return;
+
+    drawList->AddLine(p_x1.toVec2(), p_x2.toVec2(), color, line_width);
+    drawList->AddLine(p_y1.toVec2(), p_y2.toVec2(), color, line_width);
+    drawList->AddLine(p_z1.toVec2(), p_z2.toVec2(), color, line_width);
+}
+
+void draw3dBoxAroundLine(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vector start, Vector end, double cos, double sin, float size, float line_width, ImColor color, bool outline = true, bool straight = true)
 {
     float x_offset = end.x - start.x;
     float y_offset = end.y - start.y;
@@ -922,7 +1093,7 @@ void draw3dBoxAroundLine(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vec
 
     ImVec2* pts = &o_points_vec2[0];
 
-    drawList->AddConvexPolyFilled(pts, (int)o_points_vec2.size(), G::S.boxColor);
+    drawList->AddConvexPolyFilled(pts, (int)o_points_vec2.size(), color);
 
     if (outline)
     {
@@ -937,10 +1108,10 @@ void draw3dBoxAroundLine(ImDrawList* drawList, ViewMatrix currentViewMatrix, Vec
                 continue;
             }
 
-            drawList->AddLine(last_point.toVec2(), pt.toVec2(), color, G::S.boxEspWidth);
+            drawList->AddLine(last_point.toVec2(), pt.toVec2(), color, line_width);
             last_point = pt;
         }
-        drawList->AddLine(last_point.toVec2(), o_points[0].toVec2(), color, G::S.boxEspWidth);
+        drawList->AddLine(last_point.toVec2(), o_points[0].toVec2(), color, line_width);
     }
 }
 

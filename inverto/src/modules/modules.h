@@ -4,3 +4,5 @@
 #include "misc.hpp"
 #include "hud.hpp"
 #include "game_events.hpp"
+#include "quick_toggle.hpp"
+#include "planted_c4.hpp"

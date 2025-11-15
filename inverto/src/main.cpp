@@ -2,8 +2,6 @@
 #include "offset_parser.h"
 #include "cpu_raycast.hpp"
 
-using namespace std;
-
 ImFont* console_font;
 ImFont* menu_font;
 ImGuiIO* io_ptr;
@@ -41,7 +39,7 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM w_param, LPA
 }
 
 void ReadConfig(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".config";
 	std::ifstream in(ss.str(), std::ios::binary);
 	in.read(reinterpret_cast<char*>(&G::S), sizeof(G::S));
@@ -50,20 +48,20 @@ void ReadConfig(const char* name) {
 }
 
 void WriteConfig(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".config";
 	std::ofstream out(ss.str(), std::ios::binary);
 	out.write(reinterpret_cast<const char*>(&G::S), sizeof(G::S));
 }
 
 bool CheckConfig(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".config";
 	return std::filesystem::exists(ss.str());
 }
 
 void ReadTheme(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".theme";
 	std::ifstream in(ss.str(), std::ios::binary);
 	in.read(reinterpret_cast<char*>(&G::T), sizeof(G::T));
@@ -72,14 +70,14 @@ void ReadTheme(const char* name) {
 }
 
 void WriteTheme(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".theme";
 	std::ofstream out(ss.str(), std::ios::binary);
 	out.write(reinterpret_cast<const char*>(&G::T), sizeof(G::T));
 }
 
 bool CheckTheme(const char* name) {
-	ostringstream ss;
+	std::ostringstream ss;
 	ss << "assets\\" << name << ".theme";
 	return std::filesystem::exists(ss.str());
 }
@@ -227,7 +225,7 @@ void enemy_visibility_loop(){
 }
 
 void op() {
-	string off;
+	std::string off;
 	off = parseOffsets();
 
 	G::offsets.entityList = getOffset("dwEntityList", off);
@@ -237,6 +235,7 @@ void op() {
 	G::offsets.viewangles = getOffset("dwViewAngles", off);
 	G::offsets.gameRules = getOffset("dwGameRules", off);
 	G::offsets.globalVars = getOffset("dwGlobalVars", off);
+	G::offsets.planted_c4 = getOffset("dwPlantedC4", off);
 	G::offsets.playerpawn = getOffset("CCSPlayerController->m_hPlayerPawn", off);
 	G::offsets.m_nKillCount = getOffset("CCSPlayerController->m_nKillCount", off);
 
@@ -275,12 +274,14 @@ void op() {
 	G::offsets.steamid = getOffset("CBasePlayerController->m_steamID", off);
 	G::offsets.playerName = getOffset("CBasePlayerController->m_iszPlayerName", off);
 
-	G::offsets.actionTrackingServices = getOffset("CCSPlayerController->m_pActionTrackingServices", off);
-	G::offsets.damageDealt = getOffset("CCSPlayerController_ActionTrackingServices->m_unTotalRoundDamageDealt", off);
+	G::offsets.m_pActionTrackingServices = getOffset("CCSPlayerController->m_pActionTrackingServices", off);
+	G::offsets.m_unTotalRoundDamageDealt = getOffset("CCSPlayerController_ActionTrackingServices->m_unTotalRoundDamageDealt", off);
 	G::offsets.m_matchStats = getOffset("CCSPlayerController_ActionTrackingServices->m_matchStats", off);
 	G::offsets.m_bInReload = getOffset("C_CSWeaponBase->m_bInReload", off);
 
 	G::offsets.m_flFlashOverlayAlpha = getOffset("C_CSPlayerPawnBase->m_flFlashOverlayAlpha", off);
+
+	G::offsets.m_vecAbsOrigin = getOffset("CGameSceneNode->m_vecAbsOrigin", off);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
@@ -366,8 +367,7 @@ void DebugStat(const char* label, int value, const char* suffix) {
 
 std::unordered_map<std::string, bool> waiting_for_key;
 
-void Hotkey(const std::string& name, int* k, const ImVec2& size_arg = ImVec2(0, 0))
-{
+static void Hotkey(const std::string& name, int* k, const ImVec2& size_arg = ImVec2(0, 0)) {
 	if (!waiting_for_key[name]) {
 		if (ImGui::Button((name + ": " + std::string(KeyNames[*(int*)k])).c_str(), size_arg))
 			waiting_for_key[name] = true;
@@ -401,41 +401,6 @@ void PressKey(int vk) {
 
 char config_input[255];
 char theme_input[255];
-
-void SetWindowInteractivity(HWND hwnd, bool interactive)
-{
-	LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-	if (interactive)
-	{
-		exStyle &= ~WS_EX_TRANSPARENT;
-	}
-	else
-	{
-		exStyle |= WS_EX_TRANSPARENT;
-	}
-
-	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-
-	if (interactive)
-	{
-		SetForegroundWindow(hwnd);
-		SetFocus(hwnd);
-	}
-}
-
-void PushMenuStyle() {
-	for (int i = 0; i < 58; i++)
-		ImGui::PushStyleColor(i, G::T.Colors[i]);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, G::T.menu_windowRounding);
-	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, G::T.menu_frameRounding);
-	ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, G::T.menu_frameRounding);
-}
-
-void PopMenuStyle() {
-	ImGui::PopStyleVar(3);
-	ImGui::PopStyleColor(58);
-}
 
 int frames = 0;
 float frame_time = 0.f;
@@ -566,6 +531,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	ShowWindow(window, cmd_show);
 	UpdateWindow(window);
 
+	G::window = window;
+
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
 
@@ -589,9 +556,11 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	Modular::AddRenderEventHandler(Reader::OnRender);
 	Modular::AddRenderEventHandler(Misc::OnRender);
+	Modular::AddRenderEventHandler(PlantedC4::OnRender);
 	Modular::AddRenderEventHandler(ESP::OnRender);
 	Modular::AddRenderEventHandler(HUD::OnRender);
 	Modular::AddRenderEventHandler(GameEvents::OnRender);
+	Modular::AddRenderEventHandler(QuickToggle::OnRender);
 
 	Modular::AddTickEventHandler(Reader::OnTick);
 	Modular::AddTickEventHandler(Aimbot::OnTick);
@@ -603,8 +572,15 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		if (pressed) {
 			G::render_ui = !G::render_ui;
 			SetWindowInteractivity(window, G::render_ui);
+			if (G::render_ui) G::quick_toggle_enabled = false;
 		}
 	});
+
+	Modular::AddKeyEventHandler(&G::S.QUICK_TOGGLE_HOTKEY, QuickToggle::OnToggle);
+	Modular::AddKeyEventHandler(VK_RETURN, QuickToggle::OnEnter);
+	Modular::AddKeyEventHandler(VK_LBUTTON, QuickToggle::OnEnter);
+	Modular::AddKeyEventHandler(VK_UP, QuickToggle::OnUp);
+	Modular::AddKeyEventHandler(VK_DOWN, QuickToggle::OnDown);
 
 	//load offsets
 	std::thread offset_parse_thread(op);
@@ -621,11 +597,15 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 
+			if (msg.message == WM_MOUSEWHEEL) {
+				QuickToggle::OnScroll(GET_WHEEL_DELTA_WPARAM(msg.wParam));
+			}
+
 			if (msg.message == WM_QUIT)
 				running = false;
 		}
 
-		if (!running)
+		if (!running || QuickToggle::wants_to_exit)
 			break;
 
 		ImGui_ImplDX11_NewFrame();
@@ -649,7 +629,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			float bg_width = 0;
 			std::list<console_message> console_to_render;
 			for (auto cmsg : G::console) {
-				auto n = chrono::high_resolution_clock::now();
+				auto n = std::chrono::high_resolution_clock::now();
 				double elapsed_time_ms = std::chrono::duration<double, std::milli>(n - cmsg.issued).count();
 				if (elapsed_time_ms > 10000)
 					continue;
@@ -676,7 +656,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					drawList, currentVM,
 					P.copy() + Vector(0, 0, 5),
 					P.copy() - Vector(0, 0, 5),
-					1.0, 0.0, 5.f
+					1.0, 0.0, 5.f, G::S.boxEspWidth, G::S.boxColor
 				);
 			}
 			distances.sort();
@@ -690,8 +670,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			RenderEvent event;
 			event.drawList = drawList;
 			event.last_draw_time = last_frame_time / 1000.f;
-			if (cs2_focused)
-				Modular::CallRenderEvent(event);
+			Modular::CallRenderEvent(event);
 		}
 
 		if (G::render_ui) {
@@ -807,6 +786,14 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						ColorPicker(&G::S.chamsColor);
 						ImGui::EndMenu();
 					}
+					if (ImGui::BeginMenu("Planted C4"))
+					{
+						ImGui::Checkbox("Planted C4", &G::S.c4_esp);
+						ImGui::Checkbox("Cross / Box", &G::S.c4_cross);
+						ImGui::SliderFloat("Line Width", &G::S.c4_line_width, 1.f, 10.f);
+						ColorPicker(&G::S.c4_color);
+						ImGui::EndMenu();
+					}
 					ImGui::Checkbox("Absolute Text Size?", &G::S.absolute_text_size);
 					ImGui::Checkbox("Show only if visible", &G::S.espOnlyWhenVisible);
 					ImGui::Checkbox("Show only nearest info", &G::S.show_only_nearest_info);
@@ -889,6 +876,13 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("Anti Flashbang")) {
 						ImGui::Checkbox("Anti Flashbang", &G::S.anti_flashbang);
 						ColorPicker(&G::S.anti_flashbang_color);
+						ImGui::Checkbox("Render World when flashed", &G::S.anti_flashbang_world_render);
+						ImGui::SliderFloat("Render World Radius", &G::S.anti_flashbang_world_render_radius, 100.f, 1000.f);
+
+						ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
+						ImGui::SameLine();
+						ImGui::TextWrapped("This option can be incredibly laggy depending on your cpu");
+
 						ImGui::EndMenu();
 					}
 					ImGui::Checkbox("Check Team?", &G::S.teamCheck);
@@ -1063,6 +1057,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 				if (ImGui::BeginTabItem("Controls")) {
 					Hotkey("Toggle Menu", &G::S.menu_key);
+					Hotkey("Quick Toggle Menu", &G::S.QUICK_TOGGLE_HOTKEY);
 					Hotkey("Aimbot", &G::S.AIMBOT_KEY);
 					Hotkey("Bhop", &G::S.BHOP_KEY);
 					Hotkey("Jump Shot", &G::S.JUMPSHOT_HOTKEY);
@@ -1089,14 +1084,6 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::SeparatorText("Velocity");
 
 					ImGui::Checkbox("Show Velocity", &G::S.showVelocity);
-
-					/*
-					ImGui::SeparatorText("-insecure");
-
-					ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
-					ImGui::SameLine();
-					ImGui::TextWrapped("Please enable -insecure before using these options, as these write to the game and will get you banned otherwise!");
-					*/
 
 					ImGui::EndTabItem();
 				}

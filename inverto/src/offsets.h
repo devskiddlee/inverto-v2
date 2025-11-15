@@ -7,6 +7,7 @@ public:
 	int viewmatrix = 0;
 	int viewangles = 0;
 	int localPlayer = 0;
+	int planted_c4 = 0;
 	int localController = 0;
 	int entityList = 0;
 	int playerpawn = 0;
@@ -51,10 +52,11 @@ public:
 	int m_hController = 0;
 	int steamid = 0;
 	int playerName = 0;
-	int actionTrackingServices = 0;
-	int damageDealt = 0;
+	int m_pActionTrackingServices = 0;
+	int m_unTotalRoundDamageDealt = 0;
 	int m_bInReload = 0;
 	int m_flFlashOverlayAlpha = 0;
 	int m_nKillCount = 0;
 	int m_matchStats = 0;
+	int m_vecAbsOrigin = 0;
 };
