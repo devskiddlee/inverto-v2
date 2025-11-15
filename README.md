@@ -39,8 +39,7 @@ If you want to have a feature added, go to #cheat-requests in the dc!
 - nothing, give me ideas :)
 
 ### Planned:
-- Wallbang Calculations
-- ~~More Rage features (e.g. auto shoot on vis)~~ ✅
+- ❌
 
 ## Additional Info
 The program ***never*** writes to the game's memory, it only reads from it.<br>
