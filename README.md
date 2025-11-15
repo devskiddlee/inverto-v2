@@ -17,7 +17,7 @@ A feature-rich, completely external CS2 cheat written in c++
 
 # Install
 To install follow these steps:
-- download the [newest release](https://github.com/devskiddlee/inverto-v2/releases/tag/v2.1)
+- download the [newest release](https://github.com/devskiddlee/inverto-v2/releases/tag/v2.6)
 - unpack anywhere (make sure the "assets" folder is in the same folder as "inverto.exe")
 - start "inverto.exe"
 
