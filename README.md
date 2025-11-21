@@ -51,4 +51,7 @@ It uses [a2x's dumper](https://github.com/a2x/cs2-dumper/) for the offsets.
 - ~1.00ms per tick  (~1000 ticks  per second)
 - ~1.58ms per frame (~630  frames per second)
 
+# Building from Source
+If you want to build from source, you'll need to get boost first. Install it from vcpkg and add the include and lib folders in your compilation process.
+
 ### GLHF
