@@ -123,7 +123,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;windowsapp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\skiddlee\source\repos\inverto\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -143,7 +143,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>iphlpapi.lib;libcurl.lib;libssl.lib;libcrypto.lib;zlib.lib;ws2_32.lib;wldap32.lib;advapi32.lib;crypt32.lib;normaliz.lib;secur32.lib;bcrypt.lib;shlwapi.lib;d3d11.lib;windowsapp.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\skiddlee\source\repos\inverto\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
