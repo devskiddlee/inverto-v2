@@ -104,7 +104,14 @@ std::string parseOffsets()
 
     for (const auto& os : offsets)
     {
-        offset_strings.push_back(getGithubFileContent("https://raw.githubusercontent.com/a2x/cs2-dumper/refs/heads/main/output/" + os));
+        if (std::filesystem::exists("assets\\" + os)) {
+            std::ifstream ifs("assets\\" + os);
+            std::string content((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
+            offset_strings.push_back(content);
+            continue;
+        }
+        std::string content = getGithubFileContent("https://raw.githubusercontent.com/a2x/cs2-dumper/refs/heads/main/output/" + os);
+        offset_strings.push_back(content);
     }
 
     std::vector<std::string> operations;

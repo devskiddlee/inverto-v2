@@ -59,4 +59,5 @@ public:
 	int m_nKillCount = 0;
 	int m_matchStats = 0;
 	int m_vecAbsOrigin = 0;
+	int m_flC4Blow = 0;
 };

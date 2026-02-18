@@ -245,7 +245,11 @@ public:
 
 			ss << buffer;
 		}
-		G::mapName = ss.str();
+		std::string mapName = ss.str();
+		if (mapName.length() < 9)
+			G::mapName = "";
+		else
+			G::mapName = mapName.substr(5, mapName.length() - 9);
 	}
 
 	static void OnRender(RenderEvent event) {

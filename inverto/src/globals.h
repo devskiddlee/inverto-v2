@@ -180,6 +180,8 @@ public:
 
     bool anti_flashbang_world_render = true;
     float anti_flashbang_world_render_radius = 250.f;
+
+    bool console_disabled = false;
 };
 
 class Theme {
@@ -247,7 +249,6 @@ namespace G {
 	Vector windowCenter = windowSize.copy() / Vector(2, 2, 2);
 
     float FOV_conversion_factor = 1.f;
-
 	std::list<console_message> console;
 
     std::unordered_map<std::string, bool> visibleMap;
@@ -361,8 +362,7 @@ void RenderWorldInRadius(ImDrawList* drawList, float max) {
 
 int console_show = 0;
 
-void send_console_message(std::string content, ImColor color)
-{
+void send_console_message(std::string content, ImColor color) {
 	console_message cmsg;
 	cmsg.content = content;
 	cmsg.color = color;
@@ -900,8 +900,8 @@ public:
     float m_flAbsoluteFrameStartTimeStdDev; //0x000C
     int32_t m_nMaxClients; //0x0010
     char pad_0014[28]; //0x0014
-    float m_flIntervalPerTick; //0x0030
     float m_flCurrentTime; //0x0034
+    float m_flIntervalPerTick; //0x0030
     float m_flCurrentTime2; //0x0038
     char pad_003C[20]; //0x003C
     int32_t m_nTickCount; //0x0050

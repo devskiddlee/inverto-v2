@@ -283,6 +283,8 @@ void op() {
 
 	G::offsets.m_vecAbsOrigin = getOffset("CGameSceneNode->m_vecAbsOrigin", off);
 
+	G::offsets.m_flC4Blow = getOffset("C_PlantedC4->m_flC4Blow", off);
+
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
 	confirm("All offsets have been loaded!");
@@ -624,15 +626,16 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			last_offset_update = OP::offset_parse_operation_update;
 		}
 
-		if (console_show > 0) {
+		if (console_show > 0 && !G::S.console_disabled) {
 			int current_y = 100;
 			float bg_width = 0;
 			std::list<console_message> console_to_render;
-			for (auto cmsg : G::console) {
+			for (auto& cmsg : G::console) {
 				auto n = std::chrono::high_resolution_clock::now();
 				double elapsed_time_ms = std::chrono::duration<double, std::milli>(n - cmsg.issued).count();
-				if (elapsed_time_ms > 10000)
+				if (elapsed_time_ms > 10000) {
 					continue;
+				}
 
 				ImVec2 text_size = console_font->CalcTextSizeA(20.f, 1000.f, 1000.f, cmsg.content.c_str());
 				bg_width = max(bg_width, text_size.x);
@@ -640,7 +643,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 			}
 			if (console_to_render.size() > 0)
 				drawList->AddRectFilled(ImVec2(90, 90), ImVec2(100 + bg_width + 10, 100 + 21 * (float)console_to_render.size() + 10), ImColor(0, 0, 0));
-			for (auto cmsg : console_to_render) {
+			for (auto& cmsg : console_to_render) {
 				const char* c_str = cmsg.content.c_str();
 				drawList->AddText(console_font, 20.f, ImVec2(100, (float)current_y), cmsg.color, c_str, 0, 1000.f);
 				current_y += 21;
@@ -1084,6 +1087,10 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::SeparatorText("Velocity");
 
 					ImGui::Checkbox("Show Velocity", &G::S.showVelocity);
+
+					ImGui::SeparatorText("Console");
+
+					ImGui::Checkbox("Disable Console", &G::S.console_disabled);
 
 					ImGui::EndTabItem();
 				}
