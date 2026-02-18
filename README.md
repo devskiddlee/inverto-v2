@@ -36,7 +36,10 @@ To install follow these steps:
 If you want to have a feature added, go to #cheat-requests in the dc!
 
 ### Currently working on:
-- nothing, give me ideas :)
+- More Info on ESP
+	- Weapons
+    - Bomb
+ 	- Armor
 
 ### Planned:
 - ❌
