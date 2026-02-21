@@ -89,7 +89,10 @@ private:
         { "Show Velocity", &G::S.showVelocity },
         { "Planted C4", &G::S.c4_esp },
         { "Planted C4 > Cross / Box", &G::S.c4_cross },
-        { "Render World when flashed", &G::S.anti_flashbang_world_render }
+        { "Render World when flashed", &G::S.anti_flashbang_world_render },
+        { "Disable Console", &G::S.console_disabled},
+        { "Weapon Text", &G::S.weaponText },
+        { "Armor Text", &G::S.armorText }
     };
 
     inline static float gradient_offset = 1.f;

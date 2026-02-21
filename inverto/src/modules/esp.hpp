@@ -1,5 +1,76 @@
 #include "module_includes.h"
 
+struct EspText {
+	std::string content;
+	ImColor color;
+	float fontSize = 0;
+	ImVec2 contentSize;
+
+	EspText(const std::string& _content, ImColor _color, float _fontSize, ImFont* font) {
+		content = _content;
+		color = _color;
+		fontSize = _fontSize;
+		contentSize = font->CalcTextSizeA(fontSize, _HUGE_ENUF, _HUGE_ENUF, _content.c_str());
+	}
+};
+
+Vector GetBone(Entity* pawn, int b) {
+	uintptr_t sceneNode = G::memory.Read<uintptr_t>(pawn->address + G::offsets.gameScene);
+	uintptr_t boneMatrix = G::memory.Read<uintptr_t>(sceneNode + G::offsets.modelState + G::offsets.boneArray);
+	return G::memory.Read<Vector>(boneMatrix + (uint64_t)(b) * 32);
+}
+
+bool GetBonesScreenPos(Entity* pawn, std::vector<ImVec2>& out, const ViewMatrix& vm) {
+	Vector p;
+	#define ADD_BONE(b) if (!world_to_screen(GetBone(pawn, b), p, vm)) return false; out[b] = p.toVec2();
+
+	ADD_BONE(Head);
+	ADD_BONE(Neck);
+	ADD_BONE(UpperChest);
+	ADD_BONE(LowerChest);
+	ADD_BONE(Stomach);
+	ADD_BONE(Pelvis);
+	ADD_BONE(LeftShoulder);
+	ADD_BONE(LeftElbow);
+	ADD_BONE(LeftArm);
+	ADD_BONE(RightShoulder);
+	ADD_BONE(RightElbow);
+	ADD_BONE(RightArm);
+	ADD_BONE(LeftThigh);
+	ADD_BONE(LeftKnee);
+	ADD_BONE(LeftLeg);
+	ADD_BONE(RightThigh);
+	ADD_BONE(RightKnee);
+	ADD_BONE(RightLeg);
+
+	return true;
+}
+
+bool AddPolygon(Entity* pawn, const ViewMatrix& vm, int b1, int b2, const Vector cuboid_size, std::vector<std::vector<ImVec2>>* polygons) {
+	Vector start = GetBone(pawn, b1);
+	Vector end   = GetBone(pawn, b2);
+
+	std::vector<ImVec2> sP;
+	std::vector<Vector> temp_sP;
+	for (Vector pt : GetCuboidCorners(start, end, cuboid_size.x, cuboid_size.y)) {
+		Vector p;
+		if (!world_to_screen(pt, p, vm))
+			return false;
+		temp_sP.push_back(p);
+	}
+
+	std::vector<Vector> convex = GetConvexHull(temp_sP);
+
+	for (auto& pt : convex)
+		sP.push_back(pt.toVec2());
+
+	std::vector<ImVec2> out = sort_points_ccw(sP);
+	out.push_back(out.front());
+	polygons->push_back(out);
+
+	return true;
+}
+
 void esp_logic(Entity& entity, ImDrawList* drawList, int index, int max) {
 	ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);
 
@@ -69,21 +140,39 @@ void esp_logic(Entity& entity, ImDrawList* drawList, int index, int max) {
 	Vector feet = entity.originScreenPos;
 
 	if (G::S.bone_esp) {
-		for (auto& bone_connection : G::bone_connections) {
-			Vector start = get_object_at_index<Vector>(entity.bone_screen_pos, bone_connection.first);
-			if (!IsPixelInsideScreen(start))
-				continue;
-			
-			for (auto& connection : bone_connection.second) {
-				Vector end = get_object_at_index<Vector>(entity.bone_screen_pos, connection);
+		std::vector<ImVec2> bones(32);
+		if (!GetBonesScreenPos(&entity, bones, currentVM)) goto skip_bone_esp;
 
-				if (!IsPixelInsideScreen(end))
-					continue;
+		#define DRAW_BONE_CONNECTION(b1, b2) drawList->AddLine(bones[b1], bones[b2], G::S.boneColor, G::S.width);
 
-				drawList->AddLine(start.toVec2(), end.toVec2(), ImColor(100 + (155 * (index + 1) / max), 0, 100 + (155 * (index + 1) / max), 255), G::S.width);
-			}
-		}
+		// Torso
+		DRAW_BONE_CONNECTION(Head, Neck);
+		DRAW_BONE_CONNECTION(Neck, UpperChest);
+		DRAW_BONE_CONNECTION(UpperChest, LowerChest);
+		DRAW_BONE_CONNECTION(LowerChest, Stomach);
+		DRAW_BONE_CONNECTION(Stomach, Pelvis);
+
+		// Left Arm
+		DRAW_BONE_CONNECTION(UpperChest, LeftShoulder);
+		DRAW_BONE_CONNECTION(LeftShoulder, LeftElbow);
+		DRAW_BONE_CONNECTION(LeftElbow, LeftArm);
+
+		// Right Arm
+		DRAW_BONE_CONNECTION(UpperChest, RightShoulder);
+		DRAW_BONE_CONNECTION(RightShoulder, RightElbow);
+		DRAW_BONE_CONNECTION(RightElbow, RightArm);
+
+		// Left Leg
+		DRAW_BONE_CONNECTION(Pelvis, LeftThigh);
+		DRAW_BONE_CONNECTION(LeftThigh, LeftKnee);
+		DRAW_BONE_CONNECTION(LeftKnee, LeftLeg);
+
+		// Right Leg
+		DRAW_BONE_CONNECTION(Pelvis, RightThigh);
+		DRAW_BONE_CONNECTION(RightThigh, RightKnee);
+		DRAW_BONE_CONNECTION(RightKnee, RightLeg);
 	}
+	skip_bone_esp:
 
 	if (G::S.boxEsp) {
 		double angle = entity.angleEye.y / 180 * M_PI;
@@ -98,85 +187,183 @@ void esp_logic(Entity& entity, ImDrawList* drawList, int index, int max) {
 	if (G::S.chams) {
 		std::vector<std::vector<ImVec2>> polygons;
 
-		for (auto& bone_connection : G::bone_connections) {
-			Vector start = get_object_at_index<Vector>(entity.bone_pos, bone_connection.first);
+		#define ADD_LIMB(b1, b2, size) if (!AddPolygon(&entity, currentVM, b1, b2, size, &polygons)) goto skip_chams;
 
-			for (auto& connection : bone_connection.second) {
-				Vector end = get_object_at_index<Vector>(entity.bone_pos, connection);
+		// Torso
+		ADD_LIMB(Head, Neck, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(Neck, UpperChest, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(UpperChest, LowerChest, Vector(10, 17.5f, 0));
+		ADD_LIMB(LowerChest, Stomach, Vector(10, 17.5f, 0));
+		ADD_LIMB(Stomach, Pelvis, Vector(7.5f, 7.5f, 0));
 
-				Vector cuboid_size(7.5f, 7.5f, 0);
+		// Left Arm
+		ADD_LIMB(UpperChest, LeftShoulder, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(LeftShoulder, LeftElbow, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(LeftElbow, LeftArm, Vector(7.5f, 7.5f, 0));
 
-				if (bone_connection.first == 3 || connection == 3)
-					cuboid_size = Vector(10, 17.5f, 0);
+		// Right Arm
+		ADD_LIMB(UpperChest, RightShoulder, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(RightShoulder, RightElbow, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(RightElbow, RightArm, Vector(7.5f, 7.5f, 0));
 
-				std::vector<ImVec2> sP;
-				std::vector<Vector> temp_sP;
-				bool valid = true;
-				for (Vector pt : GetCuboidCorners(start, end, cuboid_size.x, cuboid_size.y)) {
-					Vector p(-10000, -10000, 0);
-					world_to_screen(pt, p, currentVM);
-					temp_sP.push_back(p);
-					if (!IsPixelInsideScreen(p))
-						valid = false;
-				}
+		// Left Leg
+		ADD_LIMB(Pelvis, LeftThigh, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(LeftThigh, LeftKnee, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(LeftKnee, LeftLeg, Vector(7.5f, 7.5f, 0));
 
-				if (!valid)
-					continue;
-
-				std::vector<Vector> convex = GetConvexHull(temp_sP);
-
-				for (auto pt : convex)
-					sP.push_back(pt.toVec2());
-
-				std::vector<ImVec2> out = sort_points_ccw(sP);
-				out.push_back(out.front());
-				polygons.push_back(out);
-			}
-		}
+		// Right Leg
+		ADD_LIMB(Pelvis, RightThigh, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(RightThigh, RightKnee, Vector(7.5f, 7.5f, 0));
+		ADD_LIMB(RightKnee, RightLeg, Vector(7.5f, 7.5f, 0));
 
 		for (auto& polygon : remove_intersections(polygons)) {
-			drawList->AddPolyline(&polygon[0], (int)polygon.size(), G::S.chamsColor, ImDrawFlags_RoundCornersAll, G::S.chamsWidth);
+			drawList->AddPolyline(polygon.data(), (int)polygon.size(), G::S.chamsColor, ImDrawFlags_RoundCornersAll, G::S.chamsWidth);
 		}
 	}
+	skip_chams:
 
 	if ((G::S.show_only_nearest_info && entity.compare(G::render_nearest_player) && ((entity.angleDiff < G::S.maxAngleDiffAimbot * (90.f / G::fov)) || G::S.disableAngleDiff))
 		|| !G::S.show_only_nearest_info) {
 		float head_dependency = hS / 20;
 		if (G::S.absolute_text_size)
 			head_dependency = 1.f;
-		float fontSize = 15.f * head_dependency;
-		if (G::S.name) {
-			Vector pos = Vector(-10000, -10000, 0);
-			world_to_screen(entity.head.copy() + Vector(0, 0, 20), pos, currentVM);
-			ImVec2 text_size = G::default_font->CalcTextSizeA(fontSize, 1000, 1000, entity.name.c_str());
 
-			ImVec2 healthTextPos;
+		Vector pos = Vector(-10000, -10000, 0);
+		if (world_to_screen(entity.head.copy() + Vector(0, 0, 20), pos, currentVM)) {
+			const float padding = 2.f;
+			const float spacing = 10.f;
+			std::vector<EspText> espText;
 
-			std::ostringstream ss;
-			ss << " ";
-			ss << entity.health;
-			ss << "/100";
-			std::string health_str = ss.str();
+			float spacing_sized = spacing * head_dependency;
+			float padding_sized = padding * head_dependency;
 
-			if (G::S.healthText) {
-				ImVec2 health_text_size = G::default_font->CalcTextSizeA(fontSize, 1000, 1000, health_str.c_str());
-				healthTextPos = pos.copy().operator-(Vector((text_size.x + health_text_size.x) / 2, max(text_size.y, health_text_size.y) / 2, 0)).operator+(Vector(text_size.x, 0, 0)).toVec2();
+			// TOP PLAYER TEXT
 
-				text_size = ImVec2(text_size.x + health_text_size.x, max(text_size.y, health_text_size.y));
+			// Player Name
+			if (G::S.name)
+				espText.emplace_back(
+					entity.name,
+					G::S.playerText,
+					15.f * head_dependency,
+					G::default_font
+				);
+
+			// Player Health
+			if (G::S.healthText)
+				espText.emplace_back(
+					str(entity.health),
+					G::S.health,
+					15.f * head_dependency,
+					G::default_font
+				);
+
+			// Player Armor
+			if (G::S.armorText) {
+				uint32_t armor = G::memory.Read<uint32_t>(entity.address + G::offsets.m_ArmorValue);
+
+				espText.emplace_back(
+					str(armor),
+					G::S.armorTextColor,
+					15.f * head_dependency,
+					G::default_font
+				);
 			}
 
-			pos = pos.copy().operator-(Vector(text_size.x / 2, text_size.y / 2, 0));
-
-			Vector text_pos = pos.copy().operator+(Vector(text_size.x, text_size.y, 0));
-			drawList->AddRectFilled(pos.copy().operator-(Vector(G::S.text_padding, G::S.text_padding, 0)).toVec2(), text_pos.operator+(Vector(G::S.text_padding, G::S.text_padding, 0)).toVec2(), ImColor(0.f, 0.f, 0.f, 0.5f), G::S.text_padding);
-			drawList->AddText(G::default_font, fontSize, pos.toVec2(), G::S.playerText, entity.name.c_str(), 0, 0.0f, 0);
-
-			if (G::S.healthText) {
-				drawList->AddText(G::default_font, fontSize, healthTextPos, G::S.health, health_str.c_str(), 0, 0.0f, 0);
+			ImVec2 size;
+			for (auto& eT : espText) {
+				size.x += eT.contentSize.x + spacing_sized;
+				size.y = max(eT.contentSize.y, size.y);
 			}
-		}
-		if (G::S.healthBox) {
-			drawList->AddRectFilled(ImVec2({ (vec.x - 0.2f * hS) - 10.f , vec.y }), ImVec2({ vec.x - 10.f, vec.y + (feet.y - vec.y) / 100 * entity.health }), G::S.health);
+			size.x -= spacing_sized; // Remove last spacing
+
+
+			ImVec2 curCursor(
+				pos.x - size.x / 2.f,
+				pos.y - size.y / 2.f
+			);
+
+			drawList->AddRectFilled(
+				{ curCursor.x - padding_sized * 2.f	,			curCursor.y - padding_sized				},
+				{ curCursor.x + size.x + padding_sized * 2.f,	curCursor.y + size.y + padding_sized	},
+				ImColor(0.f, 0.f, 0.f, 0.5f)
+			);
+
+			for (auto& eT : espText) {
+				drawList->AddText(
+					G::default_font,
+					eT.fontSize,
+					{ curCursor.x, curCursor.y + size.y - eT.contentSize.y },
+					eT.color,
+					eT.content.c_str()
+				);
+				curCursor.x += eT.contentSize.x + spacing_sized;
+			}
+
+			// BOTTOM PLAYER TEXT
+
+			if (world_to_screen(entity.origin.copy() - Vector(0, 0, 20), pos, currentVM)) {
+				espText.clear();
+
+				// Equipped Weapon
+				if (G::S.weaponText) {
+					uintptr_t clippingWeapon = G::memory.Read<uintptr_t>(entity.address + G::offsets.clippingWeapon);
+					short viewModelIndex = G::memory.Read<short>(clippingWeapon + G::offsets.AttributeManager + G::offsets.item + G::offsets.ItemDefinitionIndex);
+
+					espText.emplace_back(
+						getReadableNameFromID(viewModelIndex),
+						G::S.weaponTextColor,
+						15.f * head_dependency,
+						G::default_font
+					);
+
+					uintptr_t c4_entity = G::memory.Read<uintptr_t>(
+						G::memory.Read<uintptr_t>(G::client + G::offsets.dwWeaponC4)
+					);
+
+					int c4_owner = G::memory.Read<int>(
+						c4_entity + G::offsets.m_hOwnerEntity
+					);
+
+					if (c4_owner == entity.handle) {
+						espText.emplace_back(
+							"BOMB",
+							ImColor(180, 0, 0),
+							15.f * head_dependency,
+							G::default_font
+						);
+					}
+				}
+
+				size = { 0, 0 };
+				for (auto& eT : espText) {
+					size.x += eT.contentSize.x + spacing_sized;
+					size.y = max(eT.contentSize.y, size.y);
+				}
+				size.x -= spacing_sized; // Remove last spacing
+
+
+				ImVec2 curCursor(
+					pos.x - size.x / 2.f,
+					pos.y - size.y / 2.f
+				);
+
+				drawList->AddRectFilled(
+					{ curCursor.x - padding_sized * 2.f	,			curCursor.y - padding_sized },
+					{ curCursor.x + size.x + padding_sized * 2.f,	curCursor.y + size.y + padding_sized },
+					ImColor(0.f, 0.f, 0.f, 0.5f)
+				);
+
+				for (auto& eT : espText) {
+					drawList->AddText(
+						G::default_font,
+						eT.fontSize,
+						{ curCursor.x, curCursor.y + size.y - eT.contentSize.y },
+						eT.color,
+						eT.content.c_str()
+					);
+					curCursor.x += eT.contentSize.x + spacing_sized;
+				}
+			}
 		}
 	}
 }

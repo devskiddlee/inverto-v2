@@ -50,6 +50,12 @@ float sens = 2.0f;
 std::list<Vector> recoilpoints;
 Vector recoilreference;
 
+void GetLastRecoilPunch(Vector* punch) {
+	C_UTL_VECTOR<QAngle> aimPunchCache = G::memory.Read<C_UTL_VECTOR<QAngle>>(G::localPlayer.address + G::offsets.aimPunchAngle + 36);
+	QAngle a = G::memory.Read<QAngle>((uintptr_t)aimPunchCache.Data + (aimPunchCache.Count - 1) * sizeof(QAngle));
+	*punch = Vector(a.yaw, a.pitch, 0);
+}
+
 void calculateRecoilOffset()
 {
 	int ShotsFired = G::memory.Read<int>(G::localPlayer.address + G::offsets.iShotsFired);
@@ -57,8 +63,9 @@ void calculateRecoilOffset()
 	if (ShotsFired > 1)
 	{
 		Vector aimPunch = G::memory.Read<Vector>(G::localPlayer.address + G::offsets.aimPunchAngle);
-		newAngles.x = (aimPunch.y - oldAngles.y) * 2.f / (m_pitch * sens) / 1;
-		newAngles.y = -(aimPunch.x - oldAngles.x) * 2.f / (m_yaw * sens) / 1;
+
+		newAngles.x = (aimPunch.y - oldAngles.y) * 2.f / (m_pitch * sens);
+		newAngles.y = -(aimPunch.x - oldAngles.x) * 2.f / (m_yaw * sens);
 
 		if (newAngles != Vector(0, 0, 0))
 		{
@@ -80,14 +87,21 @@ void calculateRecoilOffset()
 float easingFactor = 23.f;
 
 void aim_and_shoot(Entity e, float speed) {
-	calculateRecoilOffset();
-
 	int entityindex = G::memory.Read<int>(G::localPlayer.address + G::offsets.IDEntIndex);
 	Vector angles = CalcAngles(G::localPlayer.head, e.head);
-	if (recoilpoints.size() > 0 && G::S.rcs)
-		aim_at(Vector(angles.x - recoilpoints.back().x / easingFactor, angles.y + recoilpoints.back().y / easingFactor, angles.z), speed);
-	else
-		aim_at(angles, speed);
+
+	Vector aimPunch;
+	GetLastRecoilPunch(&aimPunch);
+	int shotsFired = G::memory.Read<int>(G::localPlayer.address + G::offsets.iShotsFired);
+
+	// Check if RCS is on, if player is spraying and avoid garbage values
+	// (20.f limit is arbitrary, most weapons don't even go over 5.f)
+	if (G::S.rcs && shotsFired > 1 && aimPunch.length() < 20.f) {
+		angles.y -= aimPunch.y * 2.f;
+		angles.x -= aimPunch.x * 2.f;
+	}
+
+	aim_at(angles, speed);
 
 	if (G::S.triggerbot && entityindex != -1) {
 		if ((G::localPlayer.absVelocity.z > 1 || G::localPlayer.absVelocity.z < -1) && G::S.jumpShotHack && G::weaponName == "weapon_ssg08")
@@ -101,6 +115,8 @@ class Aimbot {
 public:
 	static void OnTick(TickEvent event) {
 		float speed = G::S.aimbotspeed * event.delta_time * 100 * (90.f / G::fov);
+
+
 		if (G::S.aimbot && G::entities.size() > 0) {
 			if (GetAsyncKeyState(G::S.AIMBOT_KEY)) {
 				if ((G::nearest_player.angleDiff < G::S.maxAngleDiffAimbot * (90.f / G::fov)) || G::S.disableAngleDiff) {

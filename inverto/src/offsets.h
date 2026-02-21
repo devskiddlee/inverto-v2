@@ -60,4 +60,7 @@ public:
 	int m_matchStats = 0;
 	int m_vecAbsOrigin = 0;
 	int m_flC4Blow = 0;
+	int m_ArmorValue = 0;
+	int dwWeaponC4 = 0;
+	int m_hOwnerEntity = 0;
 };

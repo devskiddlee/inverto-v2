@@ -2,6 +2,12 @@
 #include "offset_parser.h"
 #include "cpu_raycast.hpp"
 
+#define TIME_POINT std::chrono::high_resolution_clock::time_point
+#define TIME_PERIOD std::chrono::high_resolution_clock::duration
+#define NOW std::chrono::high_resolution_clock::now()
+#define TIME_SINCE(p) std::chrono::duration<float, std::milli>(NOW - p).count()
+#define SLEEP(t) std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(t))
+
 ImFont* console_font;
 ImFont* menu_font;
 ImGuiIO* io_ptr;
@@ -236,6 +242,7 @@ void op() {
 	G::offsets.gameRules = getOffset("dwGameRules", off);
 	G::offsets.globalVars = getOffset("dwGlobalVars", off);
 	G::offsets.planted_c4 = getOffset("dwPlantedC4", off);
+	G::offsets.dwWeaponC4 = getOffset("dwWeaponC4", off);
 	G::offsets.playerpawn = getOffset("CCSPlayerController->m_hPlayerPawn", off);
 	G::offsets.m_nKillCount = getOffset("CCSPlayerController->m_nKillCount", off);
 
@@ -284,6 +291,10 @@ void op() {
 	G::offsets.m_vecAbsOrigin = getOffset("CGameSceneNode->m_vecAbsOrigin", off);
 
 	G::offsets.m_flC4Blow = getOffset("C_PlantedC4->m_flC4Blow", off);
+
+	G::offsets.m_ArmorValue = getOffset("C_CSPlayerPawn->m_ArmorValue", off);
+
+	G::offsets.m_hOwnerEntity = getOffset("C_BaseEntity->m_hOwnerEntity", off);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
@@ -403,9 +414,6 @@ void PressKey(int vk) {
 
 char config_input[255];
 char theme_input[255];
-
-int frames = 0;
-float frame_time = 0.f;
 
 INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
@@ -553,9 +561,6 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	bool running = true;
 
-	int fps = 0;
-	float elapsed_second = 0.f;
-
 	Modular::AddRenderEventHandler(Reader::OnRender);
 	Modular::AddRenderEventHandler(Misc::OnRender);
 	Modular::AddRenderEventHandler(PlantedC4::OnRender);
@@ -586,9 +591,15 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	//load offsets
 	std::thread offset_parse_thread(op);
-	float last_frame_time = 0.f;
 	float gradient_offset = 1.f;
 	std::string last_offset_update = "";
+
+	TIME_POINT lastFrameTP = NOW;
+
+	#define LAST_FRAME_TIME_SIZE 64
+	float lastFrameTimes[LAST_FRAME_TIME_SIZE] { 0 };
+	size_t currentFrameTimeIndex = 0;
+	auto nextFrameTime = NOW;
 
 	while (running) {
 		auto t_start = std::chrono::high_resolution_clock::now();
@@ -609,6 +620,26 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 		if (!running || QuickToggle::wants_to_exit)
 			break;
+
+		float lastFrameTime = TIME_SINCE(lastFrameTP);
+		lastFrameTP = NOW;
+
+		if (lastFrameTime > 0.f) {
+			lastFrameTimes[currentFrameTimeIndex++] = lastFrameTime;
+			if (currentFrameTimeIndex == LAST_FRAME_TIME_SIZE) {
+				float all = 0.f;
+				for (size_t i = 0; i < LAST_FRAME_TIME_SIZE; i++) {
+					all += lastFrameTimes[i];
+				}
+				G::avg_frame_time = all / LAST_FRAME_TIME_SIZE;
+				currentFrameTimeIndex = 0;
+			}
+		}
+
+		if (!G::S.vsync) {
+			nextFrameTime += std::chrono::milliseconds((int)(1000.f / G::S.frame_cap));
+			std::this_thread::sleep_until(nextFrameTime);
+		}
 
 		ImGui_ImplDX11_NewFrame();
 		ImGui_ImplWin32_NewFrame();
@@ -672,7 +703,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		if (setup) {
 			RenderEvent event;
 			event.drawList = drawList;
-			event.last_draw_time = last_frame_time / 1000.f;
+			event.last_draw_time = lastFrameTime / 1000.f;
 			Modular::CallRenderEvent(event);
 		}
 
@@ -766,6 +797,18 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					{
 						ImGui::Checkbox("Player Names", &G::S.name);
 						ColorPicker(&G::S.playerText);
+						ImGui::EndMenu();
+					}
+					if (ImGui::BeginMenu("Player Armor"))
+					{
+						ImGui::Checkbox("Player Armor", &G::S.armorText);
+						ColorPicker(&G::S.armorTextColor);
+						ImGui::EndMenu();
+					}
+					if (ImGui::BeginMenu("Weapon Info"))
+					{
+						ImGui::Checkbox("Weapon Info", &G::S.weaponText);
+						ColorPicker(&G::S.weaponTextColor);
 						ImGui::EndMenu();
 					}
 					if (ImGui::BeginMenu("Bones"))
@@ -895,8 +938,11 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					}
 					ImGui::Text("");
 					ImGui::Checkbox("VSync", &G::S.vsync);
-					if (!G::S.vsync)
-						ImGui::SliderInt("max FPS", &G::S.frame_cap, 30, 999, "%d FPS");
+					if (!G::S.vsync) {
+						if (ImGui::SliderInt("max FPS", &G::S.frame_cap, 30, 999, "%d FPS")) {
+							nextFrameTime = NOW;
+						}
+					}
 
 					ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
 					ImGui::SameLine();
@@ -1118,32 +1164,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		else
 			swap_chain->Present(0U, 0U);
 
-		auto t_end = std::chrono::high_resolution_clock::now();
-
-		double elapsed_time_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
-
-		float to_sleep = 0.f;
-		if (!G::S.vsync && G::S.frame_cap >= 10) {
-			to_sleep = 1000.f / G::S.frame_cap;
-			to_sleep -= elapsed_time_ms;
-			std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(to_sleep));
-		}
-
-		last_frame_time = elapsed_time_ms;
-
-		if (console_show > 0) {
-			console_show -= (int)last_frame_time;
-		}
-
-		frames++;
-		frame_time += last_frame_time + to_sleep;
-		if (frame_time > 1000) {
-			G::avg_frame_time = frame_time / frames;
-			frame_time = 0;
-			frames = 0;
-		}
-
-		gradient_offset -= last_frame_time / 1000.f;
+		gradient_offset -= lastFrameTime / 1000.f;
 		if (gradient_offset < 0.f) gradient_offset = 1.f;
 	}
 

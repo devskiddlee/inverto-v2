@@ -225,49 +225,28 @@ static bool world_to_screen(const Vector& world, Vector& screen, const ViewMatri
 }
 
 
-enum bone_ids
+enum bone_ids : int
 {
-	BONE_HEAD,
-	BONE_NECK,
-	BONE_SPINE,
-	BONE_SPINE_1,
-	BONE_HIP,
-	BONE_LEFT_SHOULDER,
-	BONE_LEFT_ARM,
-	BONE_LEFT_HAND,
-	BONE_RIGHT_SHOULDER,
-	BONE_RIGHT_ARM,
-	BONE_RIGHT_HAND,
+	Head = 6,
+	Neck = 5,
+	UpperChest = 4,
+	LowerChest = 3,
+	Stomach = 2,
+	Pelvis = 0,
 
-	BONE_LEFT_HIP,
-	BONE_LEFT_KNEE,
-	BONE_LEFT_FEET,
+	LeftShoulder = 8,
+	LeftElbow = 9,
+	LeftArm = 10,
+	RightShoulder = 13,
+	RightElbow = 14,
+	RightArm = 15,
 
-	BONE_RIGHT_HIP,
-	BONE_RIGHT_KNEE,
-	BONE_RIGHT_FEET
-};
-
-std::map<bone_ids, int> bone_id_map{
-	{BONE_HEAD, 6},
-	{BONE_NECK, 0},
-	{BONE_SPINE, 4},
-	{BONE_SPINE_1, 2},
-	{BONE_HIP, 5},
-	{BONE_LEFT_SHOULDER, 8},
-	{BONE_LEFT_ARM, 9},
-	{BONE_LEFT_HAND, 10},
-	{BONE_RIGHT_SHOULDER, 13},
-	{BONE_RIGHT_ARM, 14},
-	{BONE_RIGHT_HAND, 15},
-
-	{BONE_LEFT_HIP, 22},
-	{BONE_LEFT_KNEE, 23},
-	{BONE_LEFT_FEET, 24},
-
-	{BONE_RIGHT_HIP, 25},
-	{BONE_RIGHT_KNEE, 26},
-	{BONE_RIGHT_FEET, 27}
+	LeftThigh = 22,
+	LeftKnee = 23,
+	LeftLeg = 30,
+	RightThigh = 25,
+	RightKnee = 26,
+	RightLeg = 32,
 };
 
 class Entity
@@ -292,11 +271,11 @@ public:
 	int jumpButton = 0;
 	std::string name;
 	uint64_t steam_id = 0;
-	std::list<Vector> bone_pos;
-	std::list<Vector> bone_screen_pos;
+	std::vector<Vector> bone_pos;
 	float dist = 0.f;
 	Vector pos_offset;
 	std::string id = "";
+	int handle = 0;
 
 	bool compare(Entity& entity) {
 		if (origin.operator==(entity.origin) && health == entity.health) {

@@ -19,7 +19,7 @@ void UpdateEntity(Entity& entity) {
 	entity.abs = entity.origin.copy() + entity.viewOffset;
 	uintptr_t sceneNode = G::memory.Read<uintptr_t>(entity.address + G::offsets.gameScene);
 	uintptr_t boneMatrix = G::memory.Read<uintptr_t>(sceneNode + G::offsets.modelState + G::offsets.boneArray);
-	entity.head = G::memory.Read<Vector>(boneMatrix + bone_id_map[BONE_HEAD] * 32);
+	entity.head = G::memory.Read<Vector>(boneMatrix + (uint64_t)(Head) * 32);
 
 	entity.angleEye = G::memory.Read<Vector>(entity.address + G::offsets.eyeAngles);
 	entity.health = G::memory.Read<int>(entity.address + G::offsets.health);
@@ -30,16 +30,6 @@ void UpdateEntity(Entity& entity) {
 	ViewMatrix currentVM = G::memory.Read<ViewMatrix>(G::client + G::offsets.viewmatrix);
 	world_to_screen(entity.head, entity.headScreenPos, currentVM);
 	world_to_screen(entity.origin, entity.originScreenPos, currentVM);
-
-	for (auto bone_id : bone_id_map) {
-		Vector wp = G::memory.Read<Vector>(boneMatrix + bone_id.second * 32);
-		entity.bone_pos.push_back(wp);
-
-		Vector sp = Vector(0, 0, 0);
-		world_to_screen(wp, sp, currentVM);
-		if (sp != Vector(0, 0, 0))
-			entity.bone_screen_pos.push_back(sp);
-	}
 
 	entity.angleDiff = CalcPixelDist(G::windowCenter, entity.headScreenPos);
 }
@@ -92,6 +82,7 @@ void UpdateEntities(std::list<Entity>& entities)
 
 		entity.id = str(entity.address) + entity.name;
 		entity.visible = G::visibleMap[entity.id];
+		entity.handle = pawnHandle;
 
 		if (entity.health < 1 || entity.health > 100) {
 			G::time_alive[entity.id] = 0.f;
