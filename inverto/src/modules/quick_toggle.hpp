@@ -44,6 +44,7 @@ private:
     inline static float height_adjust = 0.f;
 
     inline static std::string content;
+    inline static std::string last_content;
     inline static int index = 0;
 
 	static void DrawSearch() {
@@ -89,10 +90,18 @@ private:
         { "Show Velocity", &G::S.showVelocity },
         { "Planted C4", &G::S.c4_esp },
         { "Planted C4 > Cross / Box", &G::S.c4_cross },
-        { "Render World when flashed", &G::S.anti_flashbang_world_render },
+        { "Anti Flashbang > Render World when flashed", &G::S.anti_flashbang_world_render },
         { "Disable Console", &G::S.console_disabled},
         { "Weapon Text", &G::S.weaponText },
-        { "Armor Text", &G::S.armorText }
+        { "Armor Text", &G::S.armorText },
+        { "Smart Aim", &G::S.aimbotSmart },
+        { "Custom Text Module", &G::S.custom_text_module },
+        { "Strict Aim", &G::S.strictMouseAim },
+        { "Radar", &G::S.radarHack },
+        { "Radar > Enforce Radar Border", &G::S.radarBorder },
+        { "Radar > Point Filled", &G::S.radarHackPointFilled },
+        { "Color Overlay", &G::S.color_overlay },
+        { "Color Overlay > Background / Foreground", &G::S.color_overlay_background }
     };
 
     inline static float gradient_offset = 1.f;
@@ -142,7 +151,7 @@ public:
         if (y < 0) index++;
     }
 
-	static void OnRender(RenderEvent event) {
+	static void OnRender(const RenderEvent& event) {
 		if (!G::quick_toggle_enabled) return;
 
         gradient_offset -= event.last_draw_time;
@@ -167,6 +176,9 @@ public:
             ImGui::End();
             return;
         }
+
+        if (content != last_content)
+            index = 0;
 
         std::vector<std::string> to_compare;
         for (const auto& c : cheat_toggles) {
@@ -205,6 +217,8 @@ public:
                 ImGui::TextColored(ImColor(r, g, 0, a), to_compare[i].c_str());
             }
         }
+
+        last_content = content;
 
         PopMenuStyle();
 		ImGui::End();

@@ -9,21 +9,19 @@ private:
 		kill_animation = G::S.kill_animation_duration;
 	}
 public:
-	static void OnTick(TickEvent event) {
+	static void OnTick(const TickEvent& event) {
 		uintptr_t ats = G::memory.Read<uintptr_t>(G::localPlayerController + G::offsets.m_pActionTrackingServices);
 		CSMatchStats stats = G::memory.Read<CSMatchStats>(ats + G::offsets.m_matchStats);
 		int kill_count = stats.kills;
 
-		if (
-			kill_count != kills
-		) {
+		if (kill_count != kills) {
 			if (kill_count > kills)
 				OnPlayerKill();
 			kills = kill_count;
 		}
 	}
 
-	static void OnRender(RenderEvent event) {
+	static void OnRender(const RenderEvent& event) {
 		float t = kill_animation / G::S.kill_animation_duration;
 
 		if (t == 0.f || !G::S.kill_animation)

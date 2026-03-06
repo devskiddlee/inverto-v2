@@ -6,3 +6,4 @@
 #include "game_events.hpp"
 #include "quick_toggle.hpp"
 #include "planted_c4.hpp"
+#include "radar_hack.hpp"

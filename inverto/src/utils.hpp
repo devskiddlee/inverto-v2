@@ -224,6 +224,97 @@ static bool world_to_screen(const Vector& world, Vector& screen, const ViewMatri
 	return true;
 }
 
+static ViewMatrix Multiply(const ViewMatrix& a, const ViewMatrix& b)
+{
+	ViewMatrix r{};
+	for (int i = 0; i < 4; i++)
+		for (int j = 0; j < 4; j++)
+			for (int k = 0; k < 4; k++)
+				r.data[i][j] += a.data[i][k] * b.data[k][j];
+	return r;
+}
+
+ViewMatrix CreateCS2ShowcaseMatrix(
+	float yawDeg,
+	float pitchDeg,
+	float distance,
+	float fovDeg,
+	float screenCenterX,
+	float screenCenterY
+) {
+	const float DEG2RAD = M_PI / 180.0f;
+	float yaw = yawDeg * DEG2RAD;
+	float pitch = pitchDeg * DEG2RAD;
+
+	float camX = -distance * std::cos(pitch) * std::cos(yaw);
+	float camY = -distance * std::cos(pitch) * std::sin(yaw);
+	float camZ = distance * std::sin(pitch);
+
+	float fx = -camX;
+	float fy = -camY;
+	float fz = -camZ;
+
+	float fl = std::sqrt(fx * fx + fy * fy + fz * fz);
+	fx /= fl; fy /= fl; fz /= fl;
+
+	float upx = 0.f, upy = 0.f, upz = 1.f;
+
+	float rx = upy * fz - upz * fy;
+	float ry = upz * fx - upx * fz;
+	float rz = upx * fy - upy * fx;
+
+	float rl = std::sqrt(rx * rx + ry * ry + rz * rz);
+	rx /= rl; ry /= rl; rz /= rl;
+
+	upx = fy * rz - fz * ry;
+	upy = fz * rx - fx * rz;
+	upz = fx * ry - fy * rx;
+
+	ViewMatrix view{};
+
+	view.data[0][0] = rx;
+	view.data[0][1] = ry;
+	view.data[0][2] = rz;
+	view.data[0][3] = -(rx * camX + ry * camY + rz * camZ);
+
+	view.data[1][0] = upx;
+	view.data[1][1] = upy;
+	view.data[1][2] = upz;
+	view.data[1][3] = -(upx * camX + upy * camY + upz * camZ);
+
+	view.data[2][0] = fx;
+	view.data[2][1] = fy;
+	view.data[2][2] = fz;
+	view.data[2][3] = -(fx * camX + fy * camY + fz * camZ);
+
+	view.data[3][3] = 1.f;
+
+	float aspect = ImGui::GetIO().DisplaySize.x /
+		ImGui::GetIO().DisplaySize.y;
+
+	float f = 1.f / std::tan((fovDeg * DEG2RAD) * 0.5f);
+	float zn = 0.1f;
+	float zf = 1000.f;
+
+	ViewMatrix proj{};
+
+	proj.data[0][0] = f / aspect;
+	proj.data[1][1] = f;
+	proj.data[2][2] = zf / (zf - zn);
+	proj.data[2][3] = (-zn * zf) / (zf - zn);
+	proj.data[3][2] = 1.f;
+
+	float screenW = ImGui::GetIO().DisplaySize.x;
+	float screenH = ImGui::GetIO().DisplaySize.y;
+
+	float offsetX = ((screenCenterX / screenW) - 0.5f) * 2.f;
+	float offsetY = ((screenCenterY / screenH) - 0.5f) * 2.f;
+
+	proj.data[0][2] = offsetX;
+	proj.data[1][2] = -offsetY;
+
+	return Multiply(proj, view);
+}
 
 enum bone_ids : int
 {
@@ -276,6 +367,7 @@ public:
 	Vector pos_offset;
 	std::string id = "";
 	int handle = 0;
+	uintptr_t controller;
 
 	bool compare(Entity& entity) {
 		if (origin.operator==(entity.origin) && health == entity.health) {

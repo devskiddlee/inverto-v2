@@ -63,4 +63,12 @@ public:
 	int m_ArmorValue = 0;
 	int dwWeaponC4 = 0;
 	int m_hOwnerEntity = 0;
+	int m_bBombTicking = 0;
+	int m_bPawnHasDefuser = 0;
+	int m_nSubclassID = 0;
+	int m_bBombDefused = 0;
+	int m_bC4Activated = 0;
+	int m_bHasExploded = 0;
+	int m_iClip1 = 0;
+	int m_pReserveAmmo = 0;
 };

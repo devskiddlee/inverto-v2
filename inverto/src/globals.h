@@ -17,6 +17,13 @@ struct C_UTL_VECTOR
     T* Data = 0;
 };
 
+static constexpr uint64_t Hash(const char* str) {
+    uint64_t hash = 5381;
+    while (*str)
+        hash = ((hash << 5) + hash) + *str++;
+    return hash;
+}
+
 // might change later on
 int fuzzy_score(const std::string& pattern, const std::string& text, size_t* failed = nullptr) {
     if (pattern.empty()) return 0;
@@ -106,7 +113,11 @@ public:
 
 	int JUMPSHOT_HOTKEY = VK_XBUTTON2;
 	bool jumpShotHack = true;
-	float jumpShotThreshold = 18.f;
+
+    private:
+	    float __pad = 0.f; // was jumpShotThreshold
+
+    public:
 
 	bool anti_flashbang = true;
 	ImColor anti_flashbang_color = ImColor(255, 142, 255);
@@ -131,7 +142,7 @@ public:
 	bool bone_esp = true;
 	bool show_only_nearest_info = true;
 	bool absolute_text_size = true;
-    bool radarHack = true;
+    bool radarHack = false;
     bool ignoreVisible = false;
     bool boxEsp = true;
     float boxEspWidth = 1.f;
@@ -180,16 +191,16 @@ public:
     int kill_animation_size = 50;
     ImColor kill_animation_color = ImColor(255, 0, 255);
 
-    bool thorough_vis_check = true;
+    bool thorough_vis_check = false;
 
     int QUICK_TOGGLE_HOTKEY = VK_END;
 
-    bool c4_esp = true;
+    bool c4_esp = false;
     ImColor c4_color = ImColor(255, 0, 0, 128);
     float c4_line_width = 1.f;
     bool c4_cross = true;
 
-    bool anti_flashbang_world_render = true;
+    bool anti_flashbang_world_render = false;
     float anti_flashbang_world_render_radius = 250.f;
 
     bool console_disabled = false;
@@ -199,6 +210,57 @@ public:
 
     bool weaponText = true;
     ImColor weaponTextColor = ImColor(180, 180, 180);
+
+    ImColor radarHackColor = ImColor(255, 0, 255, 180);
+    float radarHackPointSize = 5.f;
+    bool radarHackPointFilled = false;
+    float radarOffset = 25.f;
+    float radarSize = 250.f;
+    float radarZoom = 0.5f;
+    bool radarBorder = true;
+
+    bool custom_text_module = false;
+    float custom_text_module_gradient_speed = 1.f;
+    ImColor custom_text_module_color_start = ImColor(255, 0, 255);
+    ImColor custom_text_module_color_end = ImColor(255, 255, 255);
+    ImVec2 custom_text_module_pos = { 50, 50 };
+    float custom_text_module_font_size = 20.f;
+    ImColor custom_text_module_bg_color = ImColor(0, 0, 0, 128);
+    char custom_text_content[1024] { 0 };
+
+    float custom_text_module_rounding = 5.f;
+    float spotify_module_rounding = 5.f;
+    float fps_module_rounding = 5.f;
+
+    float custom_text_module_padding = 5.f;
+    float spotify_module_padding = 5.f;
+    float fps_module_padding = 5.f;
+
+    ImColor weaponTextAmmoColor = ImColor(180, 180, 180);
+    ImColor weaponTextReloadingColor = ImColor(255, 0, 255);
+    ImColor weaponTextBombCarrierColor = ImColor(180, 0, 0);
+    ImColor weaponTextDefuseKitColor = ImColor(0, 180, 0);
+
+    bool strictMouseAim = false;
+    float strictMouseAimThreshold = 0.3f;
+
+    bool chams_filled = true;
+    
+    bool aimbotSmart = false;
+
+    bool color_overlay = false;
+    bool color_overlay_background = true;
+    ImColor color_overlay_color = ImColor(0, 0, 0, 50);
+
+    float chams_size = 1.f;
+
+    bool hide_watermark = false;
+
+    bool c4_esp_show_duration = true;
+    bool c4_esp_show_damage = true;
+
+    int tick_cap = 100;
+    bool tick_capped = false;
 };
 
 class Theme {
@@ -269,10 +331,11 @@ namespace G {
 	std::list<console_message> console;
 
     std::unordered_map<std::string, bool> visibleMap;
+    std::unordered_map<std::string, bool> lowerVisibleMap;
     std::unordered_map<std::string, float> time_alive;
 
-	std::list<Entity> entities;
-	std::list<Entity> render_entities;
+	std::vector<Entity> entities;
+	std::vector<Entity> render_entities;
 
 	std::map<int, std::list<int>> bone_connections{
 	{ 0 , {4}			},
@@ -290,8 +353,41 @@ namespace G {
 	{ 15, {16}			}
 	};
 
-	Entity nearest_player;
-	Entity render_nearest_player;
+    std::vector<Vector> bonesSample {
+        { -6.36206, -0.0710449, 37.2302 },
+        { 1181, 754, -120.181 },
+        { -5.72314, 0.139709, 42.0068 },
+        { -5.20105, 0.557251, 46.5822 },
+        { -3.4884, 0.702271, 53.1574 },
+        { -0.358887, 1.13763, 58.5164 },
+        { 2.6554, 2.57465, 62.9042 },
+        { 1181, 754, -120.181 },
+        { -4.13977, 8.21942, 55.7809 },
+        { 1.55408, 13.268, 47.0161 },
+        { 12.3718, 13.3132, 50.8795 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 3.16077, -5.29462, 54.5313 },
+        { 11.7013, -0.366455, 48.3783 },
+        { 13.8082, 10.6881, 50.6822 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { -5.26392, 3.93561, 33.5404 },
+        { 4.75952, 12.7694, 21.6235 },
+        { 1181, 754, -120.181 },
+        { -5.23462, -3.37817, 32.3953 },
+        { 1.88123, -9.15826, 17.0177 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 1181, 754, -120.181 },
+        { 2.23608, 15.1546, 5.04601 },
+        { 1181, 754, -120.181 }
+    };
+
 	ImFont* default_font;
     ImFont* menu_font;
 
@@ -314,8 +410,77 @@ namespace G {
 
     HWND window = 0;
 
+    float jumpShotThreshold = 50.f;
+
+    float radarConstant = 7.5f;
+    bool renderRadarBox = false;
+
 	Settings S{};
     Theme T{};
+}
+
+enum HitGroup : int {
+    HitGroup_Head,
+    HitGroup_Chest_Arm_Neck,
+    HitGroup_Stomach,
+    HitGroup_Leg
+};
+
+int GetDamageOfCurrentWeapon(const HitGroup& hitGroup, Entity* e) {
+    uintptr_t clippingWeapon = G::memory.Read<uintptr_t>(G::localPlayer.address + G::offsets.clippingWeapon);
+    uintptr_t weaponData = G::memory.Read<uintptr_t>(clippingWeapon + G::offsets.m_nSubclassID + 0x8);
+    int damage = G::memory.Read<int>(weaponData + 0x740);
+
+    float m_flHeadshotMultiplier = G::memory.Read<float>(weaponData + 0x744);
+
+    switch (hitGroup) {
+    case HitGroup_Head:
+        damage *= m_flHeadshotMultiplier;
+        break;
+    case HitGroup_Chest_Arm_Neck:
+        damage *= 1.f;
+        break;
+    case HitGroup_Stomach:
+        damage *= 1.25f;
+        break;
+    case HitGroup_Leg:
+        damage *= 0.75f;
+        break;
+    default:
+        break;
+    }
+
+    float m_flRangeModifier = G::memory.Read<float>(weaponData + 0x754);
+    damage *= powf(m_flRangeModifier, e->dist / 500.f);
+
+    uint32_t armor = G::memory.Read<uint32_t>(e->address + G::offsets.m_ArmorValue);
+
+    if (!armor)
+        return damage;
+
+    float m_flArmorRatio = G::memory.Read<float>(weaponData + 0x748);
+
+    float armor_bonus = 0.5f;
+    float armor_ratio = m_flArmorRatio * 0.5f;
+
+    const float armor_value = (float)(armor);
+    const float damage_to_armor = (damage - damage * armor_ratio) * armor_bonus;
+
+    if (damage_to_armor > armor_value) {
+        damage = damage - armor_value / armor_bonus;
+    }
+    else {
+        damage *= armor_ratio;
+    }
+
+    return damage;
+}
+
+float GetFovScaleFactor(float default_fov) {
+    float refRad = default_fov * (M_PI / 180.0f);
+    float curRad = G::fov * (M_PI / 180.0f);
+
+    return 1.f / (std::tan(curRad * 0.5f) / std::tan(refRad * 0.5f));
 }
 
 void PushMenuStyle() {
@@ -980,7 +1145,7 @@ std::vector<Vector> GetConvexHull(std::vector<Vector>& points) {
     return hull;
 }
 
-std::list<Vector> GetCuboidCorners(Vector start, Vector end, float width, float height)
+std::vector<Vector> GetCuboidCorners(Vector start, Vector end, float width, float height)
 {
     Vector direction = end.copy() - start.copy();
     float length = direction.length();

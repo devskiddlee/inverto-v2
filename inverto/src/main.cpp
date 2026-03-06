@@ -2,11 +2,9 @@
 #include "offset_parser.h"
 #include "cpu_raycast.hpp"
 
-#define TIME_POINT std::chrono::high_resolution_clock::time_point
-#define TIME_PERIOD std::chrono::high_resolution_clock::duration
-#define NOW std::chrono::high_resolution_clock::now()
-#define TIME_SINCE(p) std::chrono::duration<float, std::milli>(NOW - p).count()
-#define SLEEP(t) std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(t))
+#include <imgui/imgui_internal.h>
+
+
 
 ImFont* console_font;
 ImFont* menu_font;
@@ -48,7 +46,11 @@ void ReadConfig(const char* name) {
 	std::ostringstream ss;
 	ss << "assets\\" << name << ".config";
 	std::ifstream in(ss.str(), std::ios::binary);
-	in.read(reinterpret_cast<char*>(&G::S), sizeof(G::S));
+	size_t size = std::min({
+		sizeof(G::S),
+		std::filesystem::file_size(ss.str())
+	});
+	in.read(reinterpret_cast<char*>(&G::S), size);
 	G::current_config = std::string(name);
 	confirm("Config " + G::current_config + " loaded");
 }
@@ -109,9 +111,7 @@ void padTrianglesToMultipleOf4(
 
 std::thread map_parser_thread;
 std::string lastMapName;
-std::vector<Vec3> loaded_triangles_p1;
-std::vector<Vec3> loaded_triangles_p2;
-std::vector<Vec3> loaded_triangles_p3;
+TrianglesSoA loaded_triangles;
 void map_parse_loop() {
 	while (map_parser_thread.joinable()) {
 		if ((lastMapName != G::mapName && !debug_map) || (debug_map && G::triangles_loaded.size() == 0)) {
@@ -119,8 +119,11 @@ void map_parse_loop() {
 			if (debug_map) lastMapName = "de_inferno";
 
 			if (!std::filesystem::exists("assets\\maps\\" + lastMapName + ".tri")) {
-				if (lastMapName != "" && lastMapName != "<empty>" && lastMapName.find("_") != std::string::npos)
+				if (lastMapName != "" && lastMapName != "<empty>" && lastMapName.find("_") != std::string::npos) {
 					warning("Current Map '" + lastMapName + "' could not be loaded, this may affect some features.");
+					G::triangles_loaded.clear();
+					loaded_triangles.valid = false;
+				}
 				continue;
 			}
 
@@ -138,19 +141,7 @@ void map_parse_loop() {
 				in.read(reinterpret_cast<char*>(loaded.data()), count * sizeof(Triangle));
 			}
 
-			loaded_triangles_p1.clear();
-			loaded_triangles_p2.clear();
-			loaded_triangles_p3.clear();
-			for (auto& T : loaded) {
-				loaded_triangles_p1.emplace_back( T.p1.x, T.p1.y, T.p1.z );
-				loaded_triangles_p2.emplace_back( T.p2.x, T.p2.y, T.p2.z );
-				loaded_triangles_p3.emplace_back( T.p3.x, T.p3.y, T.p3.z );
-			}
-			padTrianglesToMultipleOf4(
-				loaded_triangles_p1,
-				loaded_triangles_p2,
-				loaded_triangles_p3
-			);
+			loaded_triangles.set((float*)loaded.data(), loaded.size() * 9);
 
 			G::triangles_loaded = loaded;
 			info("Map '" + lastMapName + "' loaded (" + str(loaded.size()) + " triangles).");
@@ -165,17 +156,19 @@ std::thread enemy_visibility_thread;
 int vis_ticks = 0;
 float vis_time = 0.f;
 
-void enemy_visibility_loop(){
+static void enemy_visibility_loop(){
+	//SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
 	while (enemy_visibility_thread.joinable()) {
 		auto start = std::chrono::high_resolution_clock::now();
-		bool invalid_map = G::triangles_loaded.size() == 0;
+		bool invalid_map = G::triangles_loaded.size() == 0 || !loaded_triangles.valid;
 
 		if (invalid_map && !G::S.thorough_vis_check) {
 			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(50));
 			continue;
 		}
 
-		std::list<Entity> entities = Reader::GetEntities();
+		std::vector<Entity> entities = Reader::GetEntities();
 
 		if (debug_map) {
 			Entity e;
@@ -195,18 +188,14 @@ void enemy_visibility_loop(){
 					hit = anyHitAVX512(
 						{ S.x, S.y, S.z },
 						{ E.x, E.y, E.z },
-						loaded_triangles_p1,
-						loaded_triangles_p2,
-						loaded_triangles_p3
+						loaded_triangles
 					);
 				}
 				else {
 					hit = anyHitSIMD(
 						{ S.x, S.y, S.z },
 						{ E.x, E.y, E.z },
-						loaded_triangles_p1,
-						loaded_triangles_p2,
-						loaded_triangles_p3
+						loaded_triangles
 					);
 				}
 			}
@@ -226,6 +215,48 @@ void enemy_visibility_loop(){
 			G::avg_vis_time = vis_time / vis_ticks;
 			vis_time = 0;
 			vis_ticks = 0;
+		}
+	}
+}
+
+std::thread enemy_lower_visibility_thread;
+static void enemy_lower_visibility_loop() {
+	//SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
+	while (enemy_visibility_thread.joinable()) {
+		bool invalid_map = G::triangles_loaded.size() == 0 || !loaded_triangles.valid;
+
+		if (invalid_map && !G::S.thorough_vis_check) {
+			std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(50));
+			continue;
+		}
+
+		std::vector<Entity> entities = Reader::GetEntities();
+
+		for (auto& e : entities) {
+			Vector S = G::localPlayer.head;
+			Vector E = GetBone(&e, LowerChest);
+
+			bool hit = false;
+			if (!invalid_map) {
+				if (G::use_AVX_512) {
+					hit = anyHitAVX512(
+						{ S.x, S.y, S.z },
+						{ E.x, E.y, E.z },
+						loaded_triangles
+					);
+				}
+				else {
+					hit = anyHitSIMD(
+						{ S.x, S.y, S.z },
+						{ E.x, E.y, E.z },
+						loaded_triangles
+					);
+				}
+			}
+
+			bool thorough = G::memory.Read<bool>(e.address + G::offsets.spottedState + G::offsets.spotted);
+			G::lowerVisibleMap[e.id] = !hit && (thorough || !G::S.thorough_vis_check);
 		}
 	}
 }
@@ -287,14 +318,18 @@ void op() {
 	G::offsets.m_bInReload = getOffset("C_CSWeaponBase->m_bInReload", off);
 
 	G::offsets.m_flFlashOverlayAlpha = getOffset("C_CSPlayerPawnBase->m_flFlashOverlayAlpha", off);
-
 	G::offsets.m_vecAbsOrigin = getOffset("CGameSceneNode->m_vecAbsOrigin", off);
-
 	G::offsets.m_flC4Blow = getOffset("C_PlantedC4->m_flC4Blow", off);
-
 	G::offsets.m_ArmorValue = getOffset("C_CSPlayerPawn->m_ArmorValue", off);
-
 	G::offsets.m_hOwnerEntity = getOffset("C_BaseEntity->m_hOwnerEntity", off);
+	G::offsets.m_bBombTicking = getOffset("C_PlantedC4->m_bBombTicking", off);
+	G::offsets.m_bPawnHasDefuser = getOffset("CCSPlayerController->m_bPawnHasDefuser", off);
+	G::offsets.m_nSubclassID = getOffset("C_BaseEntity->m_nSubclassID", off);
+	G::offsets.m_bC4Activated = getOffset("C_PlantedC4->m_bC4Activated", off);
+	G::offsets.m_bBombDefused = getOffset("C_PlantedC4->m_bBombDefused", off);
+	G::offsets.m_bHasExploded = getOffset("C_PlantedC4->m_bHasExploded", off);
+	G::offsets.m_iClip1 = getOffset("C_BasePlayerWeapon->m_iClip1", off);
+	G::offsets.m_pReserveAmmo = getOffset("C_BasePlayerWeapon->m_pReserveAmmo", off);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
@@ -317,11 +352,18 @@ void op() {
 
 	map_parser_thread = std::thread{ map_parse_loop };
 	enemy_visibility_thread = std::thread{ enemy_visibility_loop };
+	enemy_lower_visibility_thread = std::thread{ enemy_lower_visibility_loop };
 
 	if (!cpuSupportsAVX512())
 		warning("AVX-512 not supported on your CPU, fallback to AVX2");
 	else
 		G::use_AVX_512 = true;
+
+	if (G::S.tick_capped) {
+		Modular::SetTickCap(G::S.tick_cap);
+	} else {
+		Modular::SetTickCap(-1);
+	}
 
 	Modular::StartTickLoop();
 
@@ -415,6 +457,130 @@ void PressKey(int vk) {
 char config_input[255];
 char theme_input[255];
 
+namespace ImGui {
+	bool LinkButton(const char* label, const std::string& hover_label = "") {
+		ImVec2 cur = GetCursorScreenPos();
+
+		ImGuiStyle* style = &GetStyle();
+		ImVec4 org = style->Colors[ImGuiCol_Text];
+		style->Colors[ImGuiCol_Text] = ImColor(70, 242, 168);
+		Text(label);
+		style->Colors[ImGuiCol_Text] = org;
+
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		if (IsItemHovered()) {
+			ImVec2 size = CalcTextSize(label);
+			dl->AddLine(
+				{ cur.x, cur.y + size.y },
+				{ cur.x + size.x, cur.y + size.y },
+				ImColor(70, 242, 168)
+			);
+
+			dl->AddLine(
+				{ cur.x + size.x + size.y * 0.25f, cur.y + size.y },
+				{ cur.x + size.x + size.y * 0.75f, cur.y + size.y / 2.f },
+				ImColor(70, 242, 168)
+			);
+
+			dl->AddLine(
+				{ cur.x + size.x + size.y * 0.75f, cur.y + size.y / 2.f },
+				{ cur.x + size.x + size.y * 0.75f - size.y / 4.f, cur.y + size.y / 2.f },
+				ImColor(70, 242, 168)
+			);
+			dl->AddLine(
+				{ cur.x + size.x + size.y * 0.75f, cur.y + size.y / 2.f },
+				{ cur.x + size.x + size.y * 0.75f, cur.y + size.y / 2.f + size.y / 4.f },
+				ImColor(70, 242, 168)
+			);
+		}
+
+		if (!hover_label.empty() && IsItemHovered()) {
+			ImVec2 mpos = GetMousePos();
+			mpos.x += 20.f;
+			dl->AddText(
+				mpos,
+				(ImColor)style->Colors[ImGuiCol_Text],
+				hover_label.c_str()
+			);
+		}
+
+		return IsItemClicked();
+	}
+
+	void SeparatorTextColored(const ImVec4& col, const char* label) {
+		ImGuiStyle* style = &GetStyle();
+		ImVec4 org = style->Colors[ImGuiCol_Text];
+		style->Colors[ImGuiCol_Text] = col;
+		SeparatorText(label);
+		style->Colors[ImGuiCol_Text] = org;
+	}
+
+	void ToggleButton(const char* o1, const char* o2, bool* o1_selected) {
+		uint64_t id = (uint64_t)o1 xor (uint64_t)o2 xor (uint64_t)o1_selected;
+		PushID((void*)id);
+
+		Text(o1);
+
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+
+		static const float width = 40.f;
+		static const float height = 20.f;
+
+		ImGuiStyle* style = &GetStyle();
+
+		SameLine();
+		ImVec2 p = ImGui::GetCursorScreenPos();
+		dl->AddRectFilled(
+			p,
+			{ p.x + width, p.y + height },
+			(ImColor)style->Colors[ImGuiCol_FrameBg],
+			height / 2.f
+		);
+
+		if (*o1_selected) {
+			dl->AddCircleFilled(
+				{ p.x + height / 2.f, p.y + height / 2.f },
+				height / 2.f - 2.f,
+				(ImColor)style->Colors[ImGuiCol_SliderGrab]
+			);
+		}
+		else {
+			dl->AddCircleFilled(
+				{ p.x + width - height / 2.f, p.y + height / 2.f },
+				height / 2.f - 2.f,
+				(ImColor)style->Colors[ImGuiCol_SliderGrab]
+			);
+		}
+
+		InvisibleButton("ToggleSwitch", { width, height });
+		if (IsItemActivated()) {
+			*o1_selected = !*o1_selected;
+		}
+
+		SameLine();
+		Text(o2);
+
+		PopID();
+	}
+
+	ImVec2 Showcase(const ImVec2& size, bool* enough_space) {
+		if (enough_space)
+			*enough_space = GetContentRegionAvail().x >= size.x;
+
+		ImVec2 cur = GetCursorScreenPos();
+		ImGui::Dummy(size);
+
+		ImGui::GetWindowDrawList()->AddRectFilled(
+			cur,
+			{ cur.x + size.x, cur.y + size.y },
+			(ImColor)GetStyle().Colors[ImGuiCol_FrameBg],
+			GetStyle().FrameRounding
+		);
+
+		return { cur.x + size.x / 2.f, cur.y + size.y / 2.f };
+	}
+}
+
 INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	if (!std::filesystem::exists("assets\\default_font.ttf")) {
@@ -436,6 +602,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		MessageBoxA(0, "Please open Counter-Strike", "cs2.exe not found", MB_ICONERROR);
 		return 0;
 	}
+
+	//SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
 	EnumWindows(EnumWindowsProc, G::memory.GetProcessID());
 	G::client = G::memory.GetBase("client.dll");
@@ -549,6 +717,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	ImGui_ImplWin32_Init(window);
 	ImGui_ImplDX11_Init(device, device_context);
 
+	CreateNoBlendState(device, device_context);
+
 	ImGuiIO& io = ImGui::GetIO();
 	console_font = io.Fonts->AddFontFromFileTTF("assets\\default_font.ttf");
 	menu_font = io.Fonts->AddFontFromFileTTF("assets\\menu_font.ttf");
@@ -568,6 +738,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	Modular::AddRenderEventHandler(HUD::OnRender);
 	Modular::AddRenderEventHandler(GameEvents::OnRender);
 	Modular::AddRenderEventHandler(QuickToggle::OnRender);
+	Modular::AddRenderEventHandler(RadarHack::OnRender);
 
 	Modular::AddTickEventHandler(Reader::OnTick);
 	Modular::AddTickEventHandler(Aimbot::OnTick);
@@ -589,6 +760,11 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	Modular::AddKeyEventHandler(VK_UP, QuickToggle::OnUp);
 	Modular::AddKeyEventHandler(VK_DOWN, QuickToggle::OnDown);
 
+	if (debug) {
+		Modular::EnableTickSpeedDebugging();
+		Modular::EnableRenderSpeedDebugging();
+	}
+
 	//load offsets
 	std::thread offset_parse_thread(op);
 	float gradient_offset = 1.f;
@@ -600,6 +776,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	float lastFrameTimes[LAST_FRAME_TIME_SIZE] { 0 };
 	size_t currentFrameTimeIndex = 0;
 	auto nextFrameTime = NOW;
+
+	std::string requested_info = "";
+	std::string highlighted_info = "";
 
 	while (running) {
 		auto t_start = std::chrono::high_resolution_clock::now();
@@ -719,11 +898,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 			ImColor title_color = G::T.Colors[ImGuiCol_Text];
 
-			ImColor end;
+			ImColor end = title_color;
 			if (G::S.fancy_title)
 				end = ContrastBrightnessHSV(title_color);
-			else
-				end = title_color;
 
 			DrawGradientText(
 				"inverto",
@@ -736,36 +913,63 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 				windowDrawList
 			);
 
+			ImGuiTabItemFlags info_flags = 0;
+			int info_id = 0;
+
+			#define INFO_BTN(name)								\
+			ImGui::PushID(info_id++);							\
+			ImGui::SameLine();									\
+			if (ImGui::LinkButton("(?)", "Open Info")) {		\
+				requested_info = name;							\
+				highlighted_info = name;						\
+				info_flags |= ImGuiTabItemFlags_SetSelected;	\
+			}													\
+			ImGui::PopID();
+
 			if (ImGui::BeginTabBar("Tabs"))
 			{
 				if (ImGui::BeginTabItem("General"))
 				{
 					ImGui::Checkbox("Aimbot", &G::S.aimbot);
+
+					ImGui::Checkbox("Smart Aim", &G::S.aimbotSmart);
+					INFO_BTN("Smart Aim")
+
+					ImGui::Checkbox("Strict Aim", &G::S.strictMouseAim);
+					INFO_BTN("Strict Aim")
+					ImGui::SliderFloat("Threshold", &G::S.strictMouseAimThreshold, 0.f, 0.5f);
+					INFO_BTN("Strict Aim > Threshold")
+
 					ImGui::Checkbox("Thorough Visibility Check", &G::S.thorough_vis_check);
-					ImGui::TextColored(ImColor(255, 0, 255), "INFO");
-					ImGui::SameLine();
-					ImGui::TextWrapped("This option will account for smokes, unsupported maps etc., because it checks the CS2 Map Visiblity Status of a player, this will add a slight delay");
+					INFO_BTN("Thorough Visibility Check")
+
 					ImGui::Checkbox("Ignore Visibility Check", &G::S.ignoreVisible);
 					ImGui::Checkbox("Auto-Aim when Visible?", &G::S.autoAimWhenVisible);
+					ImGui::Checkbox("Disable Range", &G::S.disableAngleDiff);
 					if (!G::S.disableAngleDiff)
 						ImGui::SliderFloat("Max Range", &G::S.maxAngleDiffAimbot, 10, 1000);
-					ImGui::Checkbox("Disable Range", &G::S.disableAngleDiff);
 					ImGui::SliderInt("Aimbot Speed", &G::S.aimbotspeed, 500, 4000);
+					ImGui::Checkbox("Check Team?", &G::S.teamCheck);
 					ImGui::SeparatorText("");
 					ImGui::Checkbox("Triggerbot", &G::S.triggerbot);
+					INFO_BTN("Triggerbot")
 					ImGui::Checkbox("Only shoot when still?", &G::S.onlyShootWhenStill);
 					ImGui::SliderFloat("Default Shoot Delay", &G::S.default_shoot_delay, 50, 1000, "%.3f ms");
 					ImGui::SeparatorText("");
 					ImGui::Checkbox("Recoil Control", &G::S.rcs);
+					INFO_BTN("Recoil Control")
 					ImGui::Checkbox("Bunnyhop", &G::S.bhop);
+					INFO_BTN("Bunnyhop")
 					ImGui::Checkbox("Jump Shot", &G::S.jumpShotHack);
+					INFO_BTN("Jump Shot")
 					ImGui::EndTabItem();
 				}
 
 				if (ImGui::BeginTabItem("ESP")) {
-					if (ImGui::BeginMenu("Wallhack"))
+
+					ImGui::Checkbox("Enable", &G::S.esp);
+					if (ImGui::BeginMenu("Normal Color"))
 					{
-						ImGui::Checkbox("Wallhack", &G::S.esp);
 						ColorPicker(&G::S.normalColor);
 						ImGui::EndMenu();
 					}
@@ -808,12 +1012,110 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("Weapon Info"))
 					{
 						ImGui::Checkbox("Weapon Info", &G::S.weaponText);
-						ColorPicker(&G::S.weaponTextColor);
+						if (ImGui::BeginMenu("Color")) {
+							ColorPicker(&G::S.weaponTextColor);
+							ImGui::EndMenu();
+						}
+						if (ImGui::BeginMenu("Ammo Text Color")) {
+							ColorPicker(&G::S.weaponTextAmmoColor);
+							ImGui::EndMenu();
+						}
+						if (ImGui::BeginMenu("Reloading Notice Text Color")) {
+							ColorPicker(&G::S.weaponTextReloadingColor);
+							ImGui::EndMenu();
+						}
+						if (ImGui::BeginMenu("Bomb Carrier Notice Text Color")) {
+							ColorPicker(&G::S.weaponTextBombCarrierColor);
+							ImGui::EndMenu();
+						}
+						if (ImGui::BeginMenu("Defuse Kit Notice Text Color")) {
+							ColorPicker(&G::S.weaponTextDefuseKitColor);
+							ImGui::EndMenu();
+						}
 						ImGui::EndMenu();
 					}
 					if (ImGui::BeginMenu("Bones"))
 					{
 						ImGui::Checkbox("Bones", &G::S.bone_esp);
+
+						bool result = false;
+						ImVec2 center = ImGui::Showcase({ 350, 350 }, &result);
+
+						static float yaw = 0.f;
+						yaw += lastFrameTime / 30.f;
+						if (yaw > 360.f) yaw = 0.f;
+
+						ViewMatrix vm = CreateCS2ShowcaseMatrix(
+							yaw,
+							25.f,
+							150.f,
+							90.f,
+							center.x,
+							center.y + 100.f
+						);
+
+						Vector origin;
+						Vector arrow;
+						Vector arrowl;
+						Vector arrowr;
+
+						std::array<ImVec2, 33> bones;
+						if (!GetBonesScreenPosEx(bones, vm) || !result) goto skip_bones;
+
+						world_to_screen({ 0, 0, 0 }, origin, vm);
+						world_to_screen({ 20, 0, 0 }, arrow, vm);
+						world_to_screen({ 15, -5, 0 }, arrowl, vm);
+						world_to_screen({ 15, 5, 0 }, arrowr, vm);
+
+						windowDrawList->AddLine(
+							origin.toVec2(),
+							arrow.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowl.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowr.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						#define DRAW_BONE_CONNECTION_EX(b1, b2) windowDrawList->AddLine(bones[b1], bones[b2], G::S.boneColor, G::S.width);
+
+						// Torso
+						DRAW_BONE_CONNECTION_EX(Head, Neck);
+						DRAW_BONE_CONNECTION_EX(Neck, UpperChest);
+						DRAW_BONE_CONNECTION_EX(UpperChest, LowerChest);
+						DRAW_BONE_CONNECTION_EX(LowerChest, Stomach);
+						DRAW_BONE_CONNECTION_EX(Stomach, Pelvis);
+
+						// Left Arm
+						DRAW_BONE_CONNECTION_EX(UpperChest, LeftShoulder);
+						DRAW_BONE_CONNECTION_EX(LeftShoulder, LeftElbow);
+						DRAW_BONE_CONNECTION_EX(LeftElbow, LeftArm);
+
+						// Right Arm
+						DRAW_BONE_CONNECTION_EX(UpperChest, RightShoulder);
+						DRAW_BONE_CONNECTION_EX(RightShoulder, RightElbow);
+						DRAW_BONE_CONNECTION_EX(RightElbow, RightArm);
+
+						// Left Leg
+						DRAW_BONE_CONNECTION_EX(Pelvis, LeftThigh);
+						DRAW_BONE_CONNECTION_EX(LeftThigh, LeftKnee);
+						DRAW_BONE_CONNECTION_EX(LeftKnee, LeftLeg);
+
+						// Right Leg
+						DRAW_BONE_CONNECTION_EX(Pelvis, RightThigh);
+						DRAW_BONE_CONNECTION_EX(RightThigh, RightKnee);
+						DRAW_BONE_CONNECTION_EX(RightKnee, RightLeg);
+
+						skip_bones:
+
 						ImGui::SliderFloat("Line Width", &G::S.width, 1.f, 10.f);
 						ColorPicker(&G::S.boneColor);
 						ImGui::EndMenu();
@@ -828,6 +1130,108 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("Chams"))
 					{
 						ImGui::Checkbox("Chams", &G::S.chams);
+
+						bool result = false;
+						ImVec2 center = ImGui::Showcase({ 350, 350 }, &result);
+
+						static float yaw = 0.f;
+						yaw += lastFrameTime / 30.f;
+						if (yaw > 360.f) yaw = 0.f;
+
+						ViewMatrix vm = CreateCS2ShowcaseMatrix(
+							yaw,
+							25.f,
+							150.f,
+							90.f,
+							center.x,
+							center.y + 100.f
+						);
+
+						std::vector<std::vector<ImVec2>> polygons(32);
+
+						Vector origin;
+						Vector arrow;
+						Vector arrowl;
+						Vector arrowr;
+
+						if (!result) goto skip_chams;
+
+						world_to_screen({ 0, 0, 0 }, origin, vm);
+						world_to_screen({ 20, 0, 0 }, arrow, vm);
+						world_to_screen({ 15, -5, 0 }, arrowl, vm);
+						world_to_screen({ 15, 5, 0 }, arrowr, vm);
+
+						windowDrawList->AddLine(
+							origin.toVec2(),
+							arrow.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowl.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowr.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						#define ADD_LIMB_EX(b1, b2, size) if (!AddPolygonEx(vm, b1, b2, size, &polygons, G::S.chams_filled)) goto skip_chams;
+
+						// Torso
+						ADD_LIMB_EX(Head, Neck, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(Neck, UpperChest, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(UpperChest, LowerChest, Vector(10, 17.5f, 0));
+						ADD_LIMB_EX(LowerChest, Stomach, Vector(10, 17.5f, 0));
+						ADD_LIMB_EX(Stomach, Pelvis, Vector(7.5f, 7.5f, 0));
+
+						// Left Arm
+						ADD_LIMB_EX(UpperChest, LeftShoulder, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(LeftShoulder, LeftElbow, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(LeftElbow, LeftArm, Vector(7.5f, 7.5f, 0));
+
+						// Right Arm
+						ADD_LIMB_EX(UpperChest, RightShoulder, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(RightShoulder, RightElbow, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(RightElbow, RightArm, Vector(7.5f, 7.5f, 0));
+
+						// Left Leg
+						ADD_LIMB_EX(Pelvis, LeftThigh, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(LeftThigh, LeftKnee, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(LeftKnee, LeftLeg, Vector(7.5f, 7.5f, 0));
+
+						// Right Leg
+						ADD_LIMB_EX(Pelvis, RightThigh, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(RightThigh, RightKnee, Vector(7.5f, 7.5f, 0));
+						ADD_LIMB_EX(RightKnee, RightLeg, Vector(7.5f, 7.5f, 0));
+
+						if (G::S.chams_filled) {
+							ID3D11DeviceContext* ctx = g_pd3dDeviceContext;
+
+							windowDrawList->AddCallback(SetNoBlendCallback, ctx);
+
+							for (auto& polygon : polygons) {
+								windowDrawList->AddConcavePolyFilled(polygon.data(), (int)polygon.size(), G::S.chamsColor);
+							}
+
+							windowDrawList->AddCallback(RestoreBlendCallback, ctx);
+							windowDrawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+							goto skip_chams;
+						}
+
+						for (auto& polygon : remove_intersections(polygons)) {
+							windowDrawList->AddPolyline(polygon.data(), (int)polygon.size(), G::S.chamsColor, ImDrawFlags_RoundCornersAll, G::S.chamsWidth);
+						}
+						skip_chams:
+
+						ImGui::Checkbox("Filled", &G::S.chams_filled);
+						INFO_BTN("Chams > Filled")
+
+						ImGui::SliderFloat("Box Size", &G::S.chams_size, 0.f, 2.f, "%.3fx");
 						ImGui::SliderFloat("Line Width", &G::S.chamsWidth, 1.f, 10.f);
 						ColorPicker(&G::S.chamsColor);
 						ImGui::EndMenu();
@@ -835,12 +1239,108 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("Planted C4"))
 					{
 						ImGui::Checkbox("Planted C4", &G::S.c4_esp);
-						ImGui::Checkbox("Cross / Box", &G::S.c4_cross);
+
+						ImGui::Checkbox("Show Timer", &G::S.c4_esp_show_duration);
+						ImGui::Checkbox("Also display predicted Damage", &G::S.c4_esp_show_damage);
+						INFO_BTN("Planted C4 > Predicted Damage")
+
+						bool result = false;
+						ImVec2 center = ImGui::Showcase({ 150, 150 }, &result);
+
+						static float yaw = 0.f;
+						yaw += lastFrameTime / 30.f;
+						if (yaw > 360.f) yaw = 0.f;
+
+						ViewMatrix vm = CreateCS2ShowcaseMatrix(
+							yaw,
+							std::sin(yaw / 180.f * M_PI) * 25.f,
+							200.f,
+							90.f,
+							center.x,
+							center.y
+						);
+
+						Vector c4origin{ 0, 0, 0 };
+
+						Vector origin;
+						Vector arrow;
+						Vector arrowl;
+						Vector arrowr;
+
+						if (!result) goto skip_c4;
+
+						world_to_screen({ 0, 0, 0 }, origin, vm);
+						world_to_screen({ 20, 0, 0 }, arrow, vm);
+						world_to_screen({ 15, -5, 0 }, arrowl, vm);
+						world_to_screen({ 15, 5, 0 }, arrowr, vm);
+
+						windowDrawList->AddLine(
+							origin.toVec2(),
+							arrow.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowl.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						windowDrawList->AddLine(
+							arrow.toVec2(),
+							arrowr.toVec2(),
+							ImColor(200, 200, 200)
+						);
+
+						if (G::S.c4_cross) {
+							draw3dCross(
+								windowDrawList, vm,
+								c4origin,
+								10.f,
+								G::S.c4_line_width, G::S.c4_color
+							);
+						} else {
+							draw3dBoxAroundLine(
+								windowDrawList, vm,
+								c4origin.copy() + Vector(0, 0, 5),
+								c4origin.copy() - Vector(0, 0, 5),
+								1.0, 0.0, 5.f,
+								G::S.c4_line_width, G::S.c4_color
+							);
+						}
+						skip_c4:
+
+						ImGui::ToggleButton("Cross", "Box", &G::S.c4_cross);
 						ImGui::SliderFloat("Line Width", &G::S.c4_line_width, 1.f, 10.f);
 						ColorPicker(&G::S.c4_color);
 						ImGui::EndMenu();
 					}
+					if (ImGui::BeginMenu("Radar"))
+					{
+						ImGui::Checkbox("Radar", &G::S.radarHack);
+						ImGui::Checkbox("Enforce Radar Border?", &G::S.radarBorder);
+						ImGui::SliderFloat("Point Size", &G::S.radarHackPointSize, 1.f, 30.f);
+						ImGui::Checkbox("Point Filled?", &G::S.radarHackPointFilled);
+
+						ImGui::Separator();
+
+						ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
+						ImGui::SameLine();
+						ImGui::TextWrapped(
+							"The Zoom needs to match the ingame one -> Settings > Game > Radar > Radar Map Zoom"
+						);
+						ImGui::SliderFloat("Minimap Zoom", &G::S.radarZoom, 0.25f, 1.f);
+
+						ImGui::Separator();
+
+						ImGui::SliderFloat("Minimap Offset", &G::S.radarOffset, 0.f, 1000.f);
+						ImGui::SliderFloat("Minimap Size", &G::S.radarSize, 0.f, 1000.f);
+						ImGui::Checkbox("DEBUG: Render Map Rect", &G::renderRadarBox);
+						ColorPicker(&G::S.radarHackColor);
+						ImGui::EndMenu();
+					}
 					ImGui::Checkbox("Absolute Text Size?", &G::S.absolute_text_size);
+					INFO_BTN("ESP > Absolute Text Size")
 					ImGui::Checkbox("Show only if visible", &G::S.espOnlyWhenVisible);
 					ImGui::Checkbox("Show only nearest info", &G::S.show_only_nearest_info);
 					ImGui::EndTabItem();
@@ -848,80 +1348,30 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 				if (ImGui::BeginTabItem("HUD")) {
 					
+					ImGui::PushID(0);
+					ImGui::SeparatorText("Color Overlay");
+
+					ImGui::Checkbox("Enable", &G::S.color_overlay);
+
+						ImGui::ToggleButton("Background", "Foreground", &G::S.color_overlay_background);
+
+						if (ImGui::BeginMenu("Color")) {
+							ColorPicker(&G::S.color_overlay_color);
+							ImGui::EndMenu();
+						}
+
+					ImGui::PopID();
+
 					ImGui::PushID(1);
-					ImGui::SeparatorText("Kill Animation");
+					ImGui::SeparatorText("Anti Flashbang");
 
-					ImGui::Checkbox("Enable", &G::S.kill_animation);
-					ImGui::SliderFloat("Duration", &G::S.kill_animation_duration, 0.1f, 5.f, "%.1f seconds");
-					ImGui::SliderInt("Size", &G::S.kill_animation_size, 5, 100, "%dpx");
-					if (ImGui::BeginMenu("Color")) {
-						ColorPicker(&G::S.kill_animation_color);
-						ImGui::EndMenu();
-					}
-					ImGui::PopID();
+					ImGui::Checkbox("Enable", &G::S.anti_flashbang);
+					INFO_BTN("Anti-Flashbang")
 
-					ImGui::PushID(2);
-					ImGui::SeparatorText("Music / Media Module");
-					ImGui::Checkbox("Enable", &G::S.spotify_module);
-					ImGui::SliderFloat("Gradient Speed", &G::S.spotify_module_gradient_speed, 0.f, 10.f);
-
-					ImGui::SliderFloat("X", &G::S.spotify_module_pos.x, 0, G::windowSize.x);
-					ImGui::SliderFloat("Y", &G::S.spotify_module_pos.y, 0, G::windowSize.y);
-
-					ImGui::SliderFloat("Font Size", &G::S.spotify_module_font_size, 5.f, 50.f, "%.0fpt");
-
-					if (ImGui::BeginMenu("Gradient Color 1")) {
-						ColorPicker(&G::S.spotify_module_color_start);
-						ImGui::EndMenu();
-					}
-
-					if (ImGui::BeginMenu("Gradient Color 2")) {
-						ColorPicker(&G::S.spotify_module_color_end);
-						ImGui::EndMenu();
-					}
-
-					if (ImGui::BeginMenu("Background")) {
-						ColorPicker(&G::S.spotify_module_bg_color);
-						ImGui::EndMenu();
-					}
-					ImGui::PopID();
-
-					ImGui::PushID(3);
-					ImGui::SeparatorText("FPS Module");
-					ImGui::Checkbox("Enable", &G::S.fps_module);
-					ImGui::Checkbox("Also Display Tickspeed", &G::S.fps_module_tickspeed);
-					ImGui::Checkbox("Also Display VisTickspeed", &G::S.fps_module_vistickspeed);
-					ImGui::SliderFloat("Gradient Speed", &G::S.fps_module_gradient_speed, 0.f, 10.f);
-
-					ImGui::SliderFloat("X", &G::S.fps_module_pos.x, 0, G::windowSize.x);
-					ImGui::SliderFloat("Y", &G::S.fps_module_pos.y, 0, G::windowSize.y);
-
-					ImGui::SliderFloat("Font Size", &G::S.fps_module_font_size, 5.f, 50.f, "%.0fpt");
-
-					if (ImGui::BeginMenu("Gradient Color 1")) {
-						ColorPicker(&G::S.fps_module_color_start);
-						ImGui::EndMenu();
-					}
-
-					if (ImGui::BeginMenu("Gradient Color 2")) {
-						ColorPicker(&G::S.fps_module_color_end);
-						ImGui::EndMenu();
-					}
-
-					if (ImGui::BeginMenu("Background")) {
-						ColorPicker(&G::S.fps_module_bg_color);
-						ImGui::EndMenu();
-					}
-
-					ImGui::PopID();
-
-					ImGui::EndTabItem();
-				}
-
-				if (ImGui::BeginTabItem("Misc")) {
-					if (ImGui::BeginMenu("Anti Flashbang")) {
-						ImGui::Checkbox("Anti Flashbang", &G::S.anti_flashbang);
-						ColorPicker(&G::S.anti_flashbang_color);
+						if (ImGui::BeginMenu("Color")) {
+							ColorPicker(&G::S.anti_flashbang_color);
+							ImGui::EndMenu();
+						}
 						ImGui::Checkbox("Render World when flashed", &G::S.anti_flashbang_world_render);
 						ImGui::SliderFloat("Render World Radius", &G::S.anti_flashbang_world_render_radius, 100.f, 1000.f);
 
@@ -929,17 +1379,132 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						ImGui::SameLine();
 						ImGui::TextWrapped("This option can be incredibly laggy depending on your cpu");
 
-						ImGui::EndMenu();
-					}
-					ImGui::Checkbox("Check Team?", &G::S.teamCheck);
-					ImGui::Text("");
+					ImGui::PopID();
+
+					ImGui::PushID(2);
+					ImGui::SeparatorText("Kill Animation");
+
+					ImGui::Checkbox("Enable", &G::S.kill_animation);
+
+						ImGui::SliderFloat("Duration", &G::S.kill_animation_duration, 0.1f, 5.f, "%.1f seconds");
+						ImGui::SliderInt("Size", &G::S.kill_animation_size, 5, 100, "%dpx");
+						if (ImGui::BeginMenu("Color")) {
+							ColorPicker(&G::S.kill_animation_color);
+							ImGui::EndMenu();
+						}
+
+					ImGui::PopID();
+
+					ImGui::PushID(3);
+					ImGui::SeparatorText("Music / Media Module");
+					ImGui::Checkbox("Enable", &G::S.spotify_module);
+					
+						ImGui::SliderFloat("Gradient Speed", &G::S.spotify_module_gradient_speed, 0.f, 10.f);
+
+						ImGui::SliderFloat("X", &G::S.spotify_module_pos.x, 0, G::windowSize.x);
+						ImGui::SliderFloat("Y", &G::S.spotify_module_pos.y, 0, G::windowSize.y);
+
+						ImGui::SliderFloat("Font Size", &G::S.spotify_module_font_size, 5.f, 50.f, "%.0fpt");
+						ImGui::SliderFloat("Border Rounding", &G::S.spotify_module_rounding, 0.f, 50.f, "%.1fpx");
+						ImGui::SliderFloat("Padding", &G::S.spotify_module_padding, 0.f, 50.f, "%.1fpx");
+
+						if (ImGui::BeginMenu("Gradient Color 1")) {
+							ColorPicker(&G::S.spotify_module_color_start);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Gradient Color 2")) {
+							ColorPicker(&G::S.spotify_module_color_end);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Background")) {
+							ColorPicker(&G::S.spotify_module_bg_color);
+							ImGui::EndMenu();
+						}
+
+					ImGui::PopID();
+
+					ImGui::PushID(4);
+					ImGui::SeparatorText("FPS Module");
+					ImGui::Checkbox("Enable", &G::S.fps_module);
+
+						ImGui::Checkbox("Also Display Tickspeed", &G::S.fps_module_tickspeed);
+						ImGui::Checkbox("Also Display VisTickspeed", &G::S.fps_module_vistickspeed);
+						ImGui::SliderFloat("Gradient Speed", &G::S.fps_module_gradient_speed, 0.f, 10.f);
+
+						ImGui::SliderFloat("X", &G::S.fps_module_pos.x, 0, G::windowSize.x);
+						ImGui::SliderFloat("Y", &G::S.fps_module_pos.y, 0, G::windowSize.y);
+
+						ImGui::SliderFloat("Font Size", &G::S.fps_module_font_size, 5.f, 50.f, "%.0fpt");
+						ImGui::SliderFloat("Border Rounding", &G::S.fps_module_rounding, 0.f, 50.f, "%.1fpx");
+						ImGui::SliderFloat("Padding", &G::S.fps_module_padding, 0.f, 50.f, "%.1fpx");
+
+						if (ImGui::BeginMenu("Gradient Color 1")) {
+							ColorPicker(&G::S.fps_module_color_start);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Gradient Color 2")) {
+							ColorPicker(&G::S.fps_module_color_end);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Background")) {
+							ColorPicker(&G::S.fps_module_bg_color);
+							ImGui::EndMenu();
+						}
+
+					ImGui::PopID();
+
+					ImGui::PushID(5);
+					ImGui::SeparatorText("Custom Text Module");
+					ImGui::InputText(
+						"Content",
+						G::S.custom_text_content,
+						sizeof(G::S.custom_text_content)
+					);
+					ImGui::Separator();
+					ImGui::Checkbox("Enable", &G::S.custom_text_module);
+
+						ImGui::SliderFloat("Gradient Speed", &G::S.custom_text_module_gradient_speed, 0.f, 10.f);
+
+						ImGui::SliderFloat("X", &G::S.custom_text_module_pos.x, 0, G::windowSize.x);
+						ImGui::SliderFloat("Y", &G::S.custom_text_module_pos.y, 0, G::windowSize.y);
+
+						ImGui::SliderFloat("Font Size", &G::S.custom_text_module_font_size, 5.f, 50.f, "%.0fpt");
+						ImGui::SliderFloat("Border Rounding", &G::S.custom_text_module_rounding, 0.f, 50.f, "%.1fpx");
+						ImGui::SliderFloat("Padding", &G::S.custom_text_module_padding, 0.f, 50.f, "%.1fpx");
+
+						if (ImGui::BeginMenu("Gradient Color 1")) {
+							ColorPicker(&G::S.custom_text_module_color_start);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Gradient Color 2")) {
+							ColorPicker(&G::S.custom_text_module_color_end);
+							ImGui::EndMenu();
+						}
+
+						if (ImGui::BeginMenu("Background")) {
+							ColorPicker(&G::S.custom_text_module_bg_color);
+							ImGui::EndMenu();
+						}
+
+					ImGui::PopID();
+
+					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("Misc")) {
 					if (ImGui::Button("Exit Inverto")) {
 						running = false;
 					}
-					ImGui::Text("");
+					ImGui::SeparatorText("");
 					ImGui::Checkbox("VSync", &G::S.vsync);
 					if (!G::S.vsync) {
-						if (ImGui::SliderInt("max FPS", &G::S.frame_cap, 30, 999, "%d FPS")) {
+						ImGui::SliderInt("max FPS", &G::S.frame_cap, 30, 1000, "%d FPS");
+						if (ImGui::IsItemEdited()) {
 							nextFrameTime = NOW;
 						}
 					}
@@ -948,6 +1513,24 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::SameLine();
 					ImGui::TextWrapped("It is important that the CS2 frames and Inverto render frames are in-sync. Therefore use VSync in both or cap it to the same FPS.");
 					
+					ImGui::Checkbox("Cap TPS", &G::S.tick_capped);
+					INFO_BTN("Cap TPS")
+					if (ImGui::IsItemEdited() && !G::S.tick_capped) {
+						Modular::SetTickCap(-1);
+					}
+					if (ImGui::IsItemEdited() && G::S.tick_capped) {
+						Modular::SetTickCap(G::S.tick_cap);
+					}
+					
+					if (G::S.tick_capped) {
+						ImGui::SliderInt("max TPS", &G::S.tick_cap, 30, 1000, "%d TPS");
+						if (ImGui::IsItemEdited()) {
+							Modular::SetTickCap(G::S.tick_cap);
+						}
+					}
+
+					ImGui::SliderFloat("Radar Constant", &G::radarConstant, 5.f, 10.f);
+
 					ImGui::EndTabItem();
 				}
 
@@ -1093,8 +1676,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 							ImGui::TextColored(ImColor(200, 200, 200), "SteamID: ");
 							ImGui::SameLine();
 							ImGui::TextColored(ImColor(200, 0, 200), str(player.steam_id).c_str());
-							if (ImGui::Button("Open Stats [csst.at]")) {
-								ShellExecute(0, 0, ("https://csst.at/profile/" + str(player.steam_id)).c_str(), 0, 0, SW_SHOW);
+							std::string link = "https://csst.at/profile/" + str(player.steam_id);
+							if (ImGui::LinkButton("Open Stats [csst.at]", link)) {
+								ShellExecute(0, 0, link.c_str(), 0, 0, SW_SHOW);
 							}
 							ImGui::EndMenu();
 						}
@@ -1114,13 +1698,60 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 				}
 
 				if (ImGui::BeginTabItem("Debug Info")) {
-
 					ImGui::SeparatorText("Tick Timing");
+
+					if (debug) {
+
+						ImGui::Text("Tick Events:");
+
+						TimeReport* rep = nullptr;
+						size_t size = 0;
+						Modular::GetTickTimeReports(&rep, &size);
+						for (size_t i = 0; i < size; i++) {
+							ImGui::PushID(i);
+
+							ImGui::TextColored(
+								ImColor(255, 0, 255),
+								("ID " + str(i + 1)).c_str()
+							);
+							ImGui::SameLine();
+							ImGui::Text((str(rep[i].avgTime) + "ms").c_str());
+
+							ImGui::PopID();
+						}
+
+						ImGui::Separator();
+
+					}
 
 					DebugStat("Time per Tick: ", Modular::GetAverageTickTime(), "ms");
 					DebugStat("Ticks per Second: ", (int)(1000 / Modular::GetAverageTickTime()), "t/s");
 
 					ImGui::SeparatorText("Frame Timing");
+
+					if (debug) {
+
+						ImGui::Text("Render Events:");
+
+						TimeReport* rep = nullptr;
+						size_t size = 0;
+						Modular::GetRenderTimeReports(&rep, &size);
+						for (size_t i = 0; i < size; i++) {
+							ImGui::PushID(i);
+
+							ImGui::TextColored(
+								ImColor(255, 0, 255),
+								("ID " + str(i + 1)).c_str()
+							);
+							ImGui::SameLine();
+							ImGui::Text((str(rep[i].avgTime) + "ms").c_str());
+
+							ImGui::PopID();
+						}
+
+						ImGui::Separator();
+
+					}
 
 					DebugStat("Time per Frame: ", G::avg_frame_time, "ms");
 					DebugStat("Frames per Second: ", (int)(1000 / G::avg_frame_time), "f/s");
@@ -1139,6 +1770,108 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::Checkbox("Disable Console", &G::S.console_disabled);
 
 					ImGui::EndTabItem();
+				}
+
+				if (ImGui::BeginTabItem("Cheat Info", nullptr, info_flags)) {
+					ImGui::TextColored(ImColor(200, 200, 200), "Created by");
+					ImGui::SameLine();
+					if (ImGui::LinkButton("skiddlee", "https://github.com/devskiddlee/")) {
+						ShellExecute(0, 0, "https://github.com/devskiddlee/", 0, 0, SW_SHOW);
+					}
+
+					if (ImGui::LinkButton("Open Inverto Github", "https://github.com/devskiddlee/inverto-v2")) {
+						ShellExecute(0, 0, "https://github.com/devskiddlee/inverto-v2", 0, 0, SW_SHOW);
+					}
+
+					ImGui::Checkbox("Hide Watermark", &G::S.hide_watermark);
+
+					ImGui::TextColored(ImColor(235, 64, 52), "GLHF! :)");
+
+					ImGui::NewLine();
+
+					#define INFO_IMPL(name, text)									\
+					if (requested_info == name)	 {									\
+						ImGui::ScrollToItem(ImGuiScrollFlags_AlwaysCenterY);		\
+						requested_info = "";										\
+					}																\
+					if (highlighted_info == name) {									\
+						ImGui::SeparatorTextColored(ImColor(70, 242, 168), name);	\
+					} else {														\
+						ImGui::SeparatorText(name);									\
+					}																\
+					ImGui::TextColored(ImColor(255, 0, 255), "INFO");				\
+					ImGui::SameLine();												\
+					ImGui::TextWrapped(text);
+
+					INFO_IMPL(
+						"Smart Aim",
+						"Smart Aim aims optimally to allow for a higher hit chance. On low-HP players, where a stomach hit would be enough, the Aimbot now aims at it instead of the head to maximize hit chance. The AWP, for example, is always affected by this and will always aim at the stomach. This option also allows the Aimbot to aim at the stomach when the head is hidden from view."
+					);
+
+					INFO_IMPL(
+						"Strict Aim",
+						"This option will always keep the mouse moving when aiming, even just a little bit. This avoids the aiming deadzone that builds up, especially on long distances, which can make you miss your shots. Windows mouse events can only accept integers (whole numbers) as input, therefore a small aim angle can lead to no mouse movement at all because 0.4, for example, rounds down to 0. This is normally intended, but as said before can cause a deadzone at large distances."
+					);
+
+					INFO_IMPL(
+						"Strict Aim > Threshold",
+						"The threshold at which the mouse movement is rounded up (normally 0.5). Too small values can make your aimbot look jittery, and values that are too high won't affect the deadzone."
+					);
+
+					INFO_IMPL(
+						"Thorough Visibility Check",
+						"This option will account for smokes, unsupported maps etc., because it checks the CS2 map visibility status of a player, which adds a slight delay."
+					);
+
+					INFO_IMPL(
+						"Triggerbot",
+						"This option, when enabled, shoots when aiming with Aimbot and looking at an enemy. It shoots in custom defined intervals that are different for every weapon, so that it basically one-taps."
+					);
+
+					INFO_IMPL(
+						"Recoil Control",
+						"This option controls the recoil when spraying while holding the aimbot key. It doesn't regulate your recoil normally, only when you are aiming with the aimbot. It applies the negative of your current aim punch angles to the angles towards the player that is currently being aimed at."
+					);
+
+					INFO_IMPL(
+						"Bunnyhop",
+						"Jumps perfectly when hitting the ground. You need to bind jump to mouse scroll and still airstrafe correctly, otherwise you will not gain speed."
+					);
+
+					INFO_IMPL(
+						"Jump Shot",
+						"This shoots at the perfect spot when jumping with a scout. It activates on the press of your assigned button, but is best used when set to the same button as Aimbot. This works because the scout or SSG08 has a small grace period at the peak of your jump where it has full accuracy."
+					);
+
+					INFO_IMPL(
+						"Chams > Filled",
+						"Draws Chams Boxes without alpha blending to overlap them correctly. With this option, I recommend a low alpha value when choosing a color"
+					);
+
+					INFO_IMPL(
+						"Planted C4 > Predicted Damage",
+						"This uses predefined Bomb Radii values for the current map to calculate the damage you will take at your current position. This is not always accurate, but you can safely use it as an indicator to where you're safe. The Timer and Damage Text turn green when you would take less damage than the health you have left."
+					);
+
+					INFO_IMPL(
+						"ESP > Absolute Text Size",
+						"The info text of a player doesn't scale with their distance, but instead stays at a steady size. This can help when you can't make out the text if the player is too far away."
+					);
+
+					INFO_IMPL(
+						"Anti-Flashbang",
+						"Contrary to what the name implies, this option doesn't remove the flashbang effect. It just covers it with a custom, possibly more comfortable, color."
+					);
+
+					INFO_IMPL(
+						"Cap TPS",
+						"Capping the TPS (Ticks per second) is useful when experiencing \"tick drops\". Most of the time you don't need 500+ ticks per second, 100 are more than enough and further it prevents spontaneous peaks in tick time which can mess up your Aimbot or Bhop."
+					)
+
+					ImGui::EndTabItem();
+				}
+				else if (requested_info == "") {
+					highlighted_info = "";
 				}
 
 			}
@@ -1170,6 +1903,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 	map_parser_thread.detach();
 	enemy_visibility_thread.detach();
+	enemy_lower_visibility_thread.detach();
 
 	Modular::StopTickLoop();
 

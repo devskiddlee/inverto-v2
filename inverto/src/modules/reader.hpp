@@ -38,7 +38,7 @@ bool compareAngleDiff(const Entity& e1, const Entity& e2) {
 	return e1.angleDiff < e2.angleDiff;
 }
 
-void UpdateEntities(std::list<Entity>& entities)
+void UpdateEntities(std::vector<Entity>& entities)
 {
 	uintptr_t entityList = G::memory.Read<uintptr_t>(G::client + G::offsets.entityList);
 
@@ -83,6 +83,7 @@ void UpdateEntities(std::list<Entity>& entities)
 		entity.id = str(entity.address) + entity.name;
 		entity.visible = G::visibleMap[entity.id];
 		entity.handle = pawnHandle;
+		entity.controller = currController;
 
 		if (entity.health < 1 || entity.health > 100) {
 			G::time_alive[entity.id] = 0.f;
@@ -113,7 +114,7 @@ void UpdateEntities(std::list<Entity>& entities)
 	}
 }
 
-void ReloadEntities(std::list<Entity>& entities)
+void ReloadEntities(std::vector<Entity>& entities)
 {
 	G::localPlayerController = G::memory.Read<uintptr_t>(G::client + G::offsets.localController);
 	G::localPlayer.address = G::memory.Read<uintptr_t>(G::client + G::offsets.localPlayer);
@@ -131,46 +132,26 @@ struct EntityVisible {
 
 class Reader {
 public:
-	static void OnTick(TickEvent event) {
-
-		std::list<Entity> entities;
+	static std::vector<Entity> GetEntities() {
+		std::vector<Entity> entities;
 		ReloadEntities(entities);
 
-		float closest_dist = 0.f;
-		Entity temp_nearest_player;
-		for (Entity& player : entities) {
-			G::time_alive[player.id] += event.delta_time;
+		std::sort(entities.begin(), entities.end(), [](const Entity& a, const Entity& b) -> bool {
+			return a.angleDiff < b.angleDiff;
+		});
 
-			if (closest_dist > player.angleDiff || closest_dist == 0.f) {
-				closest_dist = player.angleDiff;
-				temp_nearest_player = player;
-			}
-		}
-
-		G::nearest_player = Entity(temp_nearest_player);
-		G::entities = std::list<Entity>(entities);
-	}
-
-	static void OnRender(RenderEvent event) {
-		std::list<Entity> entities;
-		ReloadEntities(entities);
-
-		float closest_dist = 0.f;
-		Entity temp_nearest_player;
-		for (Entity& player : entities) {
-			if (closest_dist > player.angleDiff || closest_dist == 0.f) {
-				closest_dist = player.angleDiff;
-				temp_nearest_player = player;
-			}
-		}
-
-		G::render_nearest_player = Entity(temp_nearest_player);
-		G::render_entities = std::list<Entity>(entities);
-	}
-
-	static std::list<Entity> GetEntities() {
-		std::list<Entity> entities;
-		ReloadEntities(entities);
 		return entities;
+	}
+
+	static void OnTick(const TickEvent& event) {
+		G::entities = GetEntities();
+
+		for (auto& e : G::entities) {
+			G::time_alive[e.id] += event.delta_time;
+		}
+	}
+
+	static void OnRender(const RenderEvent& event) {
+		G::render_entities = GetEntities();
 	}
 };

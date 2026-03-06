@@ -10,16 +10,23 @@ void move_mouse(float x, float y, float speed)
 	float vel = 0;
 	if (G::entities.size() > 0)
 	{
-		vel = G::nearest_player.absVelocity.length();
+		vel = G::entities[0].absVelocity.length();
 	}
 	float ownVel = G::localPlayer.absVelocity.length();
 
-	x = x / 360;
-	y = y / 360;
-	int repeats = (int)(speed + round(vel * 12) + round(ownVel * 12));
-	if (repeats > speed * 1.5) repeats = (int)round(speed * 1.5);
+	float repeats = speed + vel + ownVel;
+	x = x / 360 * repeats;
+	y = y / 360 * repeats;
+	
+	if (G::S.strictMouseAim) {
+		if (x > 0.f && x > G::S.strictMouseAimThreshold && x < 0.5f) x = 1.f;
+		if (x < 0.f && x < -G::S.strictMouseAimThreshold && x > -0.5f) x = -1.f;
 
-	mouse_event(0x0001, (DWORD)(-round(x * repeats)), (DWORD)round(y * repeats), 0, 0);
+		if (y > 0.f && y > G::S.strictMouseAimThreshold && y < 0.5f) y = 1.f;
+		if (y < 0.f && y < -G::S.strictMouseAimThreshold && y > -0.5f) y = -1.f;
+	}
+
+	mouse_event(0x0001, (DWORD)(-round(x)), (DWORD)round(y), 0, 0);
 }
 
 
@@ -86,9 +93,17 @@ void calculateRecoilOffset()
 
 float easingFactor = 23.f;
 
-void aim_and_shoot(Entity e, float speed) {
+void aim_and_shoot(const Entity& e, float speed) {
+	if (!G::lowerVisibleMap[e.id] && !e.visible && !G::S.ignoreVisible) return;
+
 	int entityindex = G::memory.Read<int>(G::localPlayer.address + G::offsets.IDEntIndex);
 	Vector angles = CalcAngles(G::localPlayer.head, e.head);
+
+	if (G::S.aimbotSmart) {
+		int dmg = GetDamageOfCurrentWeapon(HitGroup_Chest_Arm_Neck, &G::render_entities[0]);
+		if ((!e.visible && !G::S.ignoreVisible) || (dmg > G::entities[0].health && G::lowerVisibleMap[e.id]))
+			angles = CalcAngles(G::localPlayer.head, GetBone(&e, LowerChest));
+	}
 
 	Vector aimPunch;
 	GetLastRecoilPunch(&aimPunch);
@@ -113,15 +128,14 @@ void aim_and_shoot(Entity e, float speed) {
 
 class Aimbot {
 public:
-	static void OnTick(TickEvent event) {
-		float speed = G::S.aimbotspeed * event.delta_time * 100 * (90.f / G::fov);
-
+	static void OnTick(const TickEvent& event) {
+		float speed = G::S.aimbotspeed * event.delta_time * 100 * GetFovScaleFactor(90.f);
 
 		if (G::S.aimbot && G::entities.size() > 0) {
 			if (GetAsyncKeyState(G::S.AIMBOT_KEY)) {
-				if ((G::nearest_player.angleDiff < G::S.maxAngleDiffAimbot * (90.f / G::fov)) || G::S.disableAngleDiff) {
-					if ((G::nearest_player.visible || G::S.ignoreVisible) && G::time_alive[G::nearest_player.id] > 0.5f) {
-						aim_and_shoot(G::nearest_player, speed);
+				if ((G::entities[0].angleDiff < G::S.maxAngleDiffAimbot * GetFovScaleFactor(90.f)) || G::S.disableAngleDiff) {
+					if (G::time_alive[G::entities[0].id] > 0.5f) {
+						aim_and_shoot(G::entities[0], speed);
 					}
 				}
 			}

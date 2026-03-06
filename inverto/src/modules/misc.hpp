@@ -34,7 +34,7 @@ bool free_to_shoot = true;
 void shoot_tick(float dt) {
 	if (G::shoot && free_to_shoot) {
 		free_to_shoot = false;
-		Modular::ScheduleDelayedTask(50.f - dt * 1000, "schedule_shoot_fn", [](TickEvent event) {
+		Modular::ScheduleDelayedTask(50.f - dt * 1000, "schedule_shoot_fn", [](const TickEvent& event) {
 			int revolver = 0;
 			if (G::weaponName == "weapon_revolver")
 			{
@@ -49,7 +49,7 @@ void shoot_tick(float dt) {
 
 			mouse_event(0x0002, 0, 0, 0, GetMessageExtraInfo());
 
-			Modular::ScheduleDelayedTask(10.f + rand() % 11 + revolver, "release_shoot_btn", [](TickEvent event) {
+			Modular::ScheduleDelayedTask(10.f + rand() % 11 + revolver, "release_shoot_btn", [](const TickEvent& event) {
 
 				mouse_event(0x0004, 0, 0, 0, GetMessageExtraInfo());
 
@@ -62,7 +62,7 @@ void shoot_tick(float dt) {
 					weaponShootDelay = (float)shoot_delay[G::weaponName];
 				}
 
-				Modular::ScheduleDelayedTask(weaponShootDelay, "free_shoot_fn", [](TickEvent event) {
+				Modular::ScheduleDelayedTask(weaponShootDelay, "free_shoot_fn", [](const TickEvent& event) {
 					G::shoot = false;
 					free_to_shoot = true;
 					});
@@ -96,7 +96,7 @@ void bhop_tick(float dt) {
 			mouse_event(0x0800, 0, 0, -to_scroll, 0);
 			mouse_event(0x0800, 0, 0, to_scroll, 0);
 
-			Modular::ScheduleDelayedTask(100, "free_bhop", [](TickEvent event) {
+			Modular::ScheduleDelayedTask(100, "free_bhop", [](const TickEvent& event) {
 				free_to_bhop = true;
 			});
 		}
@@ -104,11 +104,8 @@ void bhop_tick(float dt) {
 }
 
 float time_in_air = 0.f;
-void jumpShot_tick(float dt)
-{
-	uintptr_t playerPawnAddress = G::localPlayer.address;
-
-	unsigned int fFlag = G::memory.Read<unsigned int>(playerPawnAddress + G::offsets.jumpFlag);
+void jumpShot_tick(float dt) {
+	unsigned int fFlag = G::memory.Read<unsigned int>(G::localPlayer.address + G::offsets.jumpFlag);
 
 	if (fFlag == INAIR)
 		time_in_air += dt * 1000;
@@ -119,7 +116,7 @@ void jumpShot_tick(float dt)
 	{
 		Vector velocity = G::localPlayer.absVelocity;
 
-		if (velocity.z < G::S.jumpShotThreshold && velocity.z > -G::S.jumpShotThreshold)
+		if (velocity.z < G::jumpShotThreshold && velocity.z > -G::jumpShotThreshold)
 			G::shoot = true;
 	}
 }
@@ -132,7 +129,7 @@ float get_flashbang_alpha()
 bool menu_call_cooldown = false;
 class Misc {
 public:
-	static void OnTick(TickEvent event) {
+	static void OnTick(const TickEvent& event) {
 		checkWeapon();
 		checkFov();
 		shoot_tick(event.delta_time);
@@ -158,7 +155,22 @@ public:
 			G::mapName = mapName.substr(5, mapName.length() - 9);
 	}
 
-	static void OnRender(RenderEvent event) {
+	static void OnRender(const RenderEvent& event) {
+		if (G::S.color_overlay) {
+			if (G::S.color_overlay_background)
+				event.drawList->AddRectFilled(
+					{ 0, 0 },
+					G::windowSize.toVec2(),
+					G::S.color_overlay_color
+				);
+			else
+				ImGui::GetForegroundDrawList()->AddRectFilled(
+					{ 0, 0 },
+					G::windowSize.toVec2(),
+					G::S.color_overlay_color
+				);
+		}
+
 		if (G::S.anti_flashbang) {
 			ImVec4 flashbang_color_vec = G::S.anti_flashbang_color;
 			flashbang_color_vec.w = get_flashbang_alpha();
@@ -178,6 +190,39 @@ public:
 			event.drawList->AddText(G::default_font, 30.f, { G::windowSize.x / 2 - text_width / 2, 700 }, ImColor(255, 255, 0), velocity_str.c_str());
 		
 			event.drawList->AddCircle(G::windowCenter.toVec2(), velocity.length(), ImColor(255, 255, 0));
+		}
+
+		if (!G::S.hide_watermark) {
+			const char* watermark = "inverto v3.0";
+			ImVec2 size = G::default_font->CalcTextSizeA(15.f, FLT_MAX, FLT_MAX, watermark);
+			event.drawList->AddText(
+				G::default_font, 15.f,
+				{
+					G::windowSize.x - size.x - 11.f,
+					G::windowSize.y - size.y - 5.f
+				},
+				ImColor(0, 0, 0),
+				watermark
+			);
+			event.drawList->AddText(
+				G::default_font, 15.f,
+				{
+					G::windowSize.x - size.x - 9.f,
+					G::windowSize.y - size.y - 5.f
+				},
+				ImColor(0, 0, 0),
+				watermark
+			);
+
+			event.drawList->AddText(
+				G::default_font, 15.f,
+				{
+					G::windowSize.x - size.x - 10.f,
+					G::windowSize.y - size.y - 5.f
+				},
+				ImColor(242, 84, 73),
+				watermark
+			);
 		}
 	}
 };
