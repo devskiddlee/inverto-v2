@@ -36,7 +36,7 @@ To install follow these steps:
 If you want to have a feature added, go to #cheat-requests in the dc!
 
 ### Currently working on:
-- increasing Rendering Performance
+- ❌
 
 ### Planned:
 - ❌
