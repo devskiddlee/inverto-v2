@@ -55,6 +55,7 @@ To install follow these steps:
   - Music / Media Module
   - FPS Module
   - Custom Text Module
+- Visibility Check
 - Quick Open Menu
 - VSync / Cap FPS
 - TPS Limit
