@@ -22,16 +22,48 @@ To install follow these steps:
 - start "inverto.exe"
 
 # Features
+- General
+  - Aimbot
+  - Smart Aim
+  - Strict Aim
+  - Smoke Check
+  - FOV Range
+  - Team Check
+  - Triggerbot
+  - Jump Shot
+  - Bunnyhop
+  - Recoil Control
 - ESP
-- AimBot
-- Visibility Check
-- Triggerbot
-- Anti Flashbang
-- Configs
-- Themes
+  - Direction Tracers
+  - Health Text & Box
+  - Player Names
+  - Armor
+  - Weapon Name
+  - Ammunition Info
+  - Reloading, Bomb Carrier & Defuse-Kit Notice
+  - Bones
+  - 3D Box
+  - Chams
+  - Planted C4
+    - Predicted Bomb Damage
+    - C4 Timer
+  - Radar Hack
+- HUD
+  - Color Overlay
+  - Anti Flashbang
+  - Kill Animation
+  - Music / Media Module
+  - FPS Module
+  - Custom Text Module
+- Quick Open Menu
+- VSync / Cap FPS
+- TPS Limit
+- Custom Configs
+- Custom Themes
+- Player List with Stats
+- Control Customization
+- A comprehensive list of Cheat Informations
 - Auto Offset Updater
-- Player profiles
-- & many more
 
 If you want to have a feature added, go to #cheat-requests in the dc!
 
