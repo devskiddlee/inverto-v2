@@ -26,10 +26,12 @@ To install follow these steps:
   - Aimbot
   - Smart Aim
   - Strict Aim
+  - Aim Delay
   - Smoke Check
   - FOV Range
   - Team Check
   - Triggerbot
+  - Triggerbot Delay
   - Jump Shot
   - Bunnyhop
   - Recoil Control
@@ -49,6 +51,7 @@ To install follow these steps:
     - C4 Timer
   - Radar Hack
 - HUD
+  - Ammo Circle
   - Color Overlay
   - Anti Flashbang
   - Kill Animation
