@@ -148,6 +148,11 @@ public:
 
 		for (auto& e : G::entities) {
 			G::time_alive[e.id] += event.delta_time;
+
+			if (e.visible)
+				G::timeVisibleMap[e.id] += event.delta_time;
+			else
+				G::timeVisibleMap[e.id] = 0;
 		}
 	}
 

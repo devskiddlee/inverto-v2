@@ -4,28 +4,29 @@
 
 	https://github.com/devskiddlee/
 */
-#include <imgui/imgui.h>
-#include <list>
+
+#ifndef MD_IMGUI_PATH
+#define MD_IMGUI_PATH <imgui/imgui.h>
+#endif
+
+#ifndef MD_AVOID_IMGUI
+#include MD_IMGUI_PATH
+#endif
+
 #include <thread>
 #include <chrono>
-#include <string>
 #include <vector>
-#include <map>
-#include <unordered_map>
-#include <cstddef>
-#include <memory>
-#include <iostream>
 #include <functional>
 #include <Windows.h>
 
-#define TIME_POINT std::chrono::high_resolution_clock::time_point
-#define TIME_PERIOD std::chrono::high_resolution_clock::duration
-#define NOW std::chrono::high_resolution_clock::now()
-#define TIME_SINCE(p) std::chrono::duration<float, std::milli>(NOW - p).count()
-#define SLEEP(t) std::this_thread::sleep_for(std::chrono::duration<float, std::milli>(t))
+#define MD_TIME_POINT std::chrono::high_resolution_clock::time_point
+#define MD_NOW std::chrono::high_resolution_clock::now()
+#define MD_TIME_SINCE(p) std::chrono::duration<float, std::milli>(MD_NOW - p).count()
 
 struct RenderEvent {
+#ifndef MD_AVOID_IMGUI
 	ImDrawList* drawList;
+#endif
 	float last_draw_time;
 };
 
@@ -79,27 +80,27 @@ private:
 	inline static bool debug_render_speed = false;
 	inline static std::vector<TimeReport> renderTimeReports;
 
-	inline static TIME_POINT nextTickTime = NOW;
+	inline static MD_TIME_POINT nextTickTime = MD_NOW;
 	inline static int tickCap = -1;
 
 	static void tick_loop() {
-		TIME_POINT lastTickTP = NOW;
-		#define LAST_TICK_TIME_SIZE 64
-		float lastTickTimes[LAST_TICK_TIME_SIZE]{ 0 };
+		MD_TIME_POINT lastTickTP = MD_NOW;
+		#define MD_LAST_TICK_TIME_SIZE 64
+		float lastTickTimes[MD_LAST_TICK_TIME_SIZE]{ 0 };
 		size_t currentTickTimeIndex = 0;
 
 		while (keep_alive_tick_loop) {
-			float lastTickTime = TIME_SINCE(lastTickTP);
-			lastTickTP = NOW;
+			float lastTickTime = MD_TIME_SINCE(lastTickTP);
+			lastTickTP = MD_NOW;
 
 			if (lastTickTime > 0.f) {
 				lastTickTimes[currentTickTimeIndex++] = lastTickTime;
-				if (currentTickTimeIndex == LAST_TICK_TIME_SIZE) {
+				if (currentTickTimeIndex == MD_LAST_TICK_TIME_SIZE) {
 					float all = 0.f;
-					for (size_t i = 0; i < LAST_TICK_TIME_SIZE; i++) {
+					for (size_t i = 0; i < MD_LAST_TICK_TIME_SIZE; i++) {
 						all += lastTickTimes[i];
 					}
-					avg_tick_time = all / LAST_TICK_TIME_SIZE;
+					avg_tick_time = all / MD_LAST_TICK_TIME_SIZE;
 					currentTickTimeIndex = 0;
 				}
 			}
@@ -108,9 +109,10 @@ private:
 			event.delta_time = lastTickTime / 1000.f;
 
 			for (auto it = delayed_tasks.begin(); it != delayed_tasks.end(); ) {
-				if (TIME_SINCE(it->issued) > it->delay) {
-					it->fn(event);
+				if (MD_TIME_SINCE(it->issued) > it->delay) {
+					auto fn = it->fn;
 					it = delayed_tasks.erase(it);
+					fn(event);
 				}
 				else {
 					++it;
@@ -135,7 +137,7 @@ public:
 	}
 
 	static void SetTickCap(int cap) {
-		nextTickTime = NOW;
+		nextTickTime = MD_NOW;
 		tickCap = cap;
 	}
 
@@ -160,11 +162,16 @@ public:
 	}
 
 	static float GetAverageTickTime() {
-		return Modular::avg_tick_time;
+		return avg_tick_time;
 	}
 
-	static void ScheduleDelayedTask(float delay, const char* id, std::function<void(const TickEvent& event)> fn) {
-		delayed_tasks.emplace_back(NOW, delay, fn, id);
+	static void ScheduleDelayedTask(float delay, const char* id, const std::function<void(const TickEvent& event)>& fn) {
+		DelayedTask task;
+		task.delay = delay;
+		task.id = id;
+		task.fn = fn;
+		task.issued = MD_NOW;
+		delayed_tasks.push_back(task);
 	}
 
 	static void AddRenderEventHandler(const RenderEventHandler& handler) {
@@ -181,9 +188,9 @@ public:
 			if (debug_render_speed) {
 				TimeReport* rep = &renderTimeReports.at(id);
 
-				TIME_POINT start = NOW;
+				MD_TIME_POINT start = MD_NOW;
 				handler(event);
-				rep->lastTickTimes[rep->currentTickTimeIndex++] = TIME_SINCE(start);
+				rep->lastTickTimes[rep->currentTickTimeIndex++] = MD_TIME_SINCE(start);
 				if (rep->currentTickTimeIndex == 8) {
 					float all = 0.f;
 					for (size_t i = 0; i < 8; i++) {
@@ -229,9 +236,9 @@ public:
 			if (debug_tick_speed) {
 				TimeReport* rep = &tickTimeReports.at(id);
 
-				TIME_POINT start = NOW;
+				MD_TIME_POINT start = MD_NOW;
 				handler(event);
-				rep->lastTickTimes[rep->currentTickTimeIndex++] = TIME_SINCE(start);
+				rep->lastTickTimes[rep->currentTickTimeIndex++] = MD_TIME_SINCE(start);
 				if (rep->currentTickTimeIndex == 8) {
 					float all = 0.f;
 					for (size_t i = 0; i < 8; i++) {

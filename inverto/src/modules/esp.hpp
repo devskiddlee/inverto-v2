@@ -391,8 +391,8 @@ void esp_logic(Entity& entity, ImDrawList* drawList, int index, int max) {
 						G::default_font
 					);
 
-					int m_iClip1 = G::memory.Read<int>(clippingWeapon + 0x18D0);
-					int m_pReserveAmmo = G::memory.Read<int>(clippingWeapon + 0x18D8);
+					int m_iClip1 = G::memory.Read<int>(clippingWeapon + G::offsets.m_iClip1);
+					int m_pReserveAmmo = G::memory.Read<int>(clippingWeapon + G::offsets.m_pReserveAmmo);
 					espText.emplace_back(
 						str(m_iClip1) + "/" + str(m_pReserveAmmo),
 						G::S.weaponTextAmmoColor,

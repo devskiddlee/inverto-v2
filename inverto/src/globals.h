@@ -261,6 +261,13 @@ public:
 
     int tick_cap = 100;
     bool tick_capped = false;
+
+    float triggerbotDelay = 50.f;
+    float aimAtDelay = 0.f;
+
+    bool ammoCircle = false;
+    float ammoCircleSize = 20.f;
+    ImColor ammoCircleColor= ImColor(255, 0, 255);
 };
 
 class Theme {
@@ -333,6 +340,7 @@ namespace G {
     std::unordered_map<std::string, bool> visibleMap;
     std::unordered_map<std::string, bool> lowerVisibleMap;
     std::unordered_map<std::string, float> time_alive;
+    std::unordered_map<std::string, float> timeVisibleMap;
 
 	std::vector<Entity> entities;
 	std::vector<Entity> render_entities;
@@ -419,6 +427,10 @@ namespace G {
     Theme T{};
 }
 
+static uintptr_t getWeaponVData(const uintptr_t& weaponEntity) {
+    return G::memory.Read<uintptr_t>(weaponEntity + G::offsets.m_nSubclassID + 0x8);
+}
+
 enum HitGroup : int {
     HitGroup_Head,
     HitGroup_Chest_Arm_Neck,
@@ -428,10 +440,10 @@ enum HitGroup : int {
 
 int GetDamageOfCurrentWeapon(const HitGroup& hitGroup, Entity* e) {
     uintptr_t clippingWeapon = G::memory.Read<uintptr_t>(G::localPlayer.address + G::offsets.clippingWeapon);
-    uintptr_t weaponData = G::memory.Read<uintptr_t>(clippingWeapon + G::offsets.m_nSubclassID + 0x8);
-    int damage = G::memory.Read<int>(weaponData + 0x740);
+    uintptr_t weaponData = getWeaponVData(clippingWeapon);
+    int damage = G::memory.Read<int>(weaponData + G::offsets.m_nDamage);
 
-    float m_flHeadshotMultiplier = G::memory.Read<float>(weaponData + 0x744);
+    float m_flHeadshotMultiplier = G::memory.Read<float>(weaponData + G::offsets.m_flHeadshotMultiplier);
 
     switch (hitGroup) {
     case HitGroup_Head:
@@ -450,7 +462,7 @@ int GetDamageOfCurrentWeapon(const HitGroup& hitGroup, Entity* e) {
         break;
     }
 
-    float m_flRangeModifier = G::memory.Read<float>(weaponData + 0x754);
+    float m_flRangeModifier = G::memory.Read<float>(weaponData + G::offsets.m_flRangeModifier);
     damage *= powf(m_flRangeModifier, e->dist / 500.f);
 
     uint32_t armor = G::memory.Read<uint32_t>(e->address + G::offsets.m_ArmorValue);

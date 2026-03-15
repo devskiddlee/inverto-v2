@@ -34,7 +34,7 @@ bool free_to_shoot = true;
 void shoot_tick(float dt) {
 	if (G::shoot && free_to_shoot) {
 		free_to_shoot = false;
-		Modular::ScheduleDelayedTask(50.f - dt * 1000, "schedule_shoot_fn", [](const TickEvent& event) {
+		Modular::ScheduleDelayedTask(G::S.triggerbotDelay - dt * 1000, "schedule_shoot_fn", [](const TickEvent& event) {
 			int revolver = 0;
 			if (G::weaponName == "weapon_revolver")
 			{

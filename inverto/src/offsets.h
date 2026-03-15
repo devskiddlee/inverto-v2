@@ -69,6 +69,11 @@ public:
 	int m_bBombDefused = 0;
 	int m_bC4Activated = 0;
 	int m_bHasExploded = 0;
+	int m_nDamage = 0;
+	int m_flHeadshotMultiplier = 0;
+	int m_flRangeModifier = 0;
+	int m_flArmorRatio = 0;
+	int m_iMaxClip1 = 0;
 	int m_iClip1 = 0;
 	int m_pReserveAmmo = 0;
 };

@@ -54,44 +54,11 @@ float m_pitch = 0.022f;
 float m_yaw = 0.022f;
 float sens = 2.0f;
 
-std::list<Vector> recoilpoints;
-Vector recoilreference;
-
 void GetLastRecoilPunch(Vector* punch) {
 	C_UTL_VECTOR<QAngle> aimPunchCache = G::memory.Read<C_UTL_VECTOR<QAngle>>(G::localPlayer.address + G::offsets.aimPunchAngle + 36);
 	QAngle a = G::memory.Read<QAngle>((uintptr_t)aimPunchCache.Data + (aimPunchCache.Count - 1) * sizeof(QAngle));
 	*punch = Vector(a.yaw, a.pitch, 0);
 }
-
-void calculateRecoilOffset()
-{
-	int ShotsFired = G::memory.Read<int>(G::localPlayer.address + G::offsets.iShotsFired);
-
-	if (ShotsFired > 1)
-	{
-		Vector aimPunch = G::memory.Read<Vector>(G::localPlayer.address + G::offsets.aimPunchAngle);
-
-		newAngles.x = (aimPunch.y - oldAngles.y) * 2.f / (m_pitch * sens);
-		newAngles.y = -(aimPunch.x - oldAngles.x) * 2.f / (m_yaw * sens);
-
-		if (newAngles != Vector(0, 0, 0))
-		{
-			Vector nw = recoilreference + newAngles;
-			recoilpoints.push_back(nw);
-			recoilreference = nw;
-		}
-
-		oldAngles = aimPunch;
-	}
-	else
-	{
-		recoilpoints.clear();
-		recoilreference = Vector(0, 0, 0);
-		oldAngles = Vector(0, 0, 0);
-	}
-}
-
-float easingFactor = 23.f;
 
 void aim_and_shoot(const Entity& e, float speed) {
 	if (!G::lowerVisibleMap[e.id] && !e.visible && !G::S.ignoreVisible) return;
@@ -131,10 +98,15 @@ public:
 	static void OnTick(const TickEvent& event) {
 		float speed = G::S.aimbotspeed * event.delta_time * 100 * GetFovScaleFactor(90.f);
 
+		bool aim = true;
+		if (G::S.aimAtDelay > 0.f && !G::S.ignoreVisible && G::entities.size() > 0) {
+			aim = (G::S.aimAtDelay / 1000.f) < G::timeVisibleMap[G::entities[0].id];
+		}
+
 		if (G::S.aimbot && G::entities.size() > 0) {
 			if (GetAsyncKeyState(G::S.AIMBOT_KEY)) {
 				if ((G::entities[0].angleDiff < G::S.maxAngleDiffAimbot * GetFovScaleFactor(90.f)) || G::S.disableAngleDiff) {
-					if (G::time_alive[G::entities[0].id] > 0.5f) {
+					if (G::time_alive[G::entities[0].id] > 0.5f && aim) {
 						aim_and_shoot(G::entities[0], speed);
 					}
 				}
@@ -150,7 +122,7 @@ public:
 					break;
 				}
 			}
-			if (v && G::time_alive[to_aim_at.id] > 0.5f) {
+			if (v && G::time_alive[to_aim_at.id] > 0.5f && aim) {
 				aim_and_shoot(to_aim_at, speed);
 			}
 		}

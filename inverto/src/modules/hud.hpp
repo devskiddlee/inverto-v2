@@ -7,6 +7,23 @@ private:
 	inline static float fsp_gradient_offset = 1.f;
 	inline static std::pair<std::string, std::string> media = { "", "" };
 	inline static float media_cooldown = 1.f;
+
+	static void drawArcCircle(const ImVec2& position, float perc, float maxPerc, float radius, const ImColor& color) {
+		float a_max = ((float)M_PI * 2.0f);
+		float v1 = perc / maxPerc;
+		float difference = v1 - 1.0f;
+		ImGui::GetBackgroundDrawList()->PathArcTo(
+			position, radius,
+			(-(a_max / 4.0f)) + (a_max / maxPerc) * (maxPerc - perc),
+			a_max - (a_max / 4.0f),
+			200 - 1
+		);
+		ImGui::GetBackgroundDrawList()->PathStroke(
+			color,
+			ImDrawFlags_None,
+			2.0f
+		);
+	}
 public:
 	static void OnTick(const TickEvent& event) {
 		media_cooldown -= event.delta_time;
@@ -17,6 +34,21 @@ public:
 	}
 
 	static void OnRender(const RenderEvent& event) {
+		if (G::S.ammoCircle) {
+			uintptr_t clippingWeapon = G::memory.Read<uintptr_t>(G::localPlayer.address + G::offsets.clippingWeapon);
+			uintptr_t weaponData = getWeaponVData(clippingWeapon);
+			int32_t m_iMaxClip1 = G::memory.Read<int32_t>(weaponData + G::offsets.m_iMaxClip1);
+			int32_t m_iClip1 = G::memory.Read<int32_t>(clippingWeapon + G::offsets.m_iClip1);
+
+			drawArcCircle(
+				G::windowCenter.toVec2(),
+				(float)m_iClip1,
+				(float)m_iMaxClip1,
+				G::S.ammoCircleSize,
+				G::S.ammoCircleColor
+			);
+		}
+
 		if (G::S.spotify_module) {
 			std::string s = format("Playing: {} - {}", media.first, media.second);
 			const char* text = s.c_str();

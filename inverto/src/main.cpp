@@ -4,8 +4,6 @@
 
 #include <imgui/imgui_internal.h>
 
-
-
 ImFont* console_font;
 ImFont* menu_font;
 ImGuiIO* io_ptr;
@@ -328,8 +326,13 @@ void op() {
 	G::offsets.m_bC4Activated = getOffset("C_PlantedC4->m_bC4Activated", off);
 	G::offsets.m_bBombDefused = getOffset("C_PlantedC4->m_bBombDefused", off);
 	G::offsets.m_bHasExploded = getOffset("C_PlantedC4->m_bHasExploded", off);
-	G::offsets.m_iClip1 = getOffset("C_BasePlayerWeapon->m_iClip1", off);
+	G::offsets.m_nDamage = getOffset("CCSWeaponBaseVData->m_nDamage", off);
+	G::offsets.m_flHeadshotMultiplier = getOffset("CCSWeaponBaseVData->m_flHeadshotMultiplier ", off);
+	G::offsets.m_flRangeModifier = getOffset("CCSWeaponBaseVData->m_flRangeModifier", off);
+	G::offsets.m_flArmorRatio = getOffset("CCSWeaponBaseVData->m_flArmorRatio", off);
+	G::offsets.m_iMaxClip1 = getOffset("CBasePlayerWeaponVData->m_iMaxClip1", off);
 	G::offsets.m_pReserveAmmo = getOffset("C_BasePlayerWeapon->m_pReserveAmmo", off);
+	G::offsets.m_iClip1 = getOffset("C_BasePlayerWeapon->m_iClip1", off);
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(250));
 
@@ -770,12 +773,12 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 	float gradient_offset = 1.f;
 	std::string last_offset_update = "";
 
-	TIME_POINT lastFrameTP = NOW;
+	MD_TIME_POINT lastFrameTP = MD_NOW;
 
 	#define LAST_FRAME_TIME_SIZE 64
 	float lastFrameTimes[LAST_FRAME_TIME_SIZE] { 0 };
 	size_t currentFrameTimeIndex = 0;
-	auto nextFrameTime = NOW;
+	auto nextFrameTime = MD_NOW;
 
 	std::string requested_info = "";
 	std::string highlighted_info = "";
@@ -800,8 +803,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 		if (!running || QuickToggle::wants_to_exit)
 			break;
 
-		float lastFrameTime = TIME_SINCE(lastFrameTP);
-		lastFrameTP = NOW;
+		float lastFrameTime = MD_TIME_SINCE(lastFrameTP);
+		lastFrameTP = MD_NOW;
 
 		if (lastFrameTime > 0.f) {
 			lastFrameTimes[currentFrameTimeIndex++] = lastFrameTime;
@@ -949,12 +952,16 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (!G::S.disableAngleDiff)
 						ImGui::SliderFloat("Max Range", &G::S.maxAngleDiffAimbot, 10, 1000);
 					ImGui::SliderInt("Aimbot Speed", &G::S.aimbotspeed, 500, 4000);
+					ImGui::SliderFloat("Aim Delay", &G::S.aimAtDelay, 0.f, 1000.f, "%.1f ms");
 					ImGui::Checkbox("Check Team?", &G::S.teamCheck);
 					ImGui::SeparatorText("");
 					ImGui::Checkbox("Triggerbot", &G::S.triggerbot);
 					INFO_BTN("Triggerbot")
 					ImGui::Checkbox("Only shoot when still?", &G::S.onlyShootWhenStill);
-					ImGui::SliderFloat("Default Shoot Delay", &G::S.default_shoot_delay, 50, 1000, "%.3f ms");
+					ImGui::SliderFloat("Default Shoot Pause", &G::S.default_shoot_delay, 50, 1000, "%.1f ms");
+					INFO_BTN("Triggerbot > Default Shoot Pause")
+					ImGui::SliderFloat("Delay", &G::S.triggerbotDelay, 0.f, 100.f, "%.1f ms");
+					INFO_BTN("Triggerbot > Delay")
 					ImGui::SeparatorText("");
 					ImGui::Checkbox("Recoil Control", &G::S.rcs);
 					INFO_BTN("Recoil Control")
@@ -986,7 +993,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (ImGui::BeginMenu("Direction Tracers"))
 					{
 						ImGui::Checkbox("Direction Tracers", &G::S.directionTracer);
-						ImGui::SliderFloat("Max Length", &G::S.directionTracerMaxLength, 10.f, 1000.f);
+						ImGui::SliderFloat("Max Length", &G::S.directionTracerMaxLength, 10.f, 1000.f, "%.1f px");
 						ColorPicker(&G::S.directionCrosshair);
 						ImGui::EndMenu();
 					}
@@ -1116,14 +1123,14 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 						skip_bones:
 
-						ImGui::SliderFloat("Line Width", &G::S.width, 1.f, 10.f);
+						ImGui::SliderFloat("Line Width", &G::S.width, 1.f, 10.f, "%.1f px");
 						ColorPicker(&G::S.boneColor);
 						ImGui::EndMenu();
 					}
 					if (ImGui::BeginMenu("3D Box"))
 					{
 						ImGui::Checkbox("3D Box", &G::S.boxEsp);
-						ImGui::SliderFloat("Line Width", &G::S.boxEspWidth, 1.f, 10.f);
+						ImGui::SliderFloat("Line Width", &G::S.boxEspWidth, 1.f, 10.f, "%.1f px");
 						ColorPicker(&G::S.boxColor);
 						ImGui::EndMenu();
 					}
@@ -1232,7 +1239,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						INFO_BTN("Chams > Filled")
 
 						ImGui::SliderFloat("Box Size", &G::S.chams_size, 0.f, 2.f, "%.3fx");
-						ImGui::SliderFloat("Line Width", &G::S.chamsWidth, 1.f, 10.f);
+						ImGui::SliderFloat("Line Width", &G::S.chamsWidth, 1.f, 10.f, "%.1f px");
 						ColorPicker(&G::S.chamsColor);
 						ImGui::EndMenu();
 					}
@@ -1311,7 +1318,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						skip_c4:
 
 						ImGui::ToggleButton("Cross", "Box", &G::S.c4_cross);
-						ImGui::SliderFloat("Line Width", &G::S.c4_line_width, 1.f, 10.f);
+						ImGui::SliderFloat("Line Width", &G::S.c4_line_width, 1.f, 10.f, "%.1f px");
 						ColorPicker(&G::S.c4_color);
 						ImGui::EndMenu();
 					}
@@ -1319,7 +1326,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					{
 						ImGui::Checkbox("Radar", &G::S.radarHack);
 						ImGui::Checkbox("Enforce Radar Border?", &G::S.radarBorder);
-						ImGui::SliderFloat("Point Size", &G::S.radarHackPointSize, 1.f, 30.f);
+						ImGui::SliderFloat("Point Size", &G::S.radarHackPointSize, 1.f, 30.f, "%.1f px");
 						ImGui::Checkbox("Point Filled?", &G::S.radarHackPointFilled);
 
 						ImGui::Separator();
@@ -1333,8 +1340,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 						ImGui::Separator();
 
-						ImGui::SliderFloat("Minimap Offset", &G::S.radarOffset, 0.f, 1000.f);
-						ImGui::SliderFloat("Minimap Size", &G::S.radarSize, 0.f, 1000.f);
+						ImGui::SliderFloat("Minimap Offset", &G::S.radarOffset, 0.f, 1000.f, "%.1f px");
+						ImGui::SliderFloat("Minimap Size", &G::S.radarSize, 0.f, 1000.f, "%.1f px");
 						ImGui::Checkbox("DEBUG: Render Map Rect", &G::renderRadarBox);
 						ColorPicker(&G::S.radarHackColor);
 						ImGui::EndMenu();
@@ -1348,6 +1355,13 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 				if (ImGui::BeginTabItem("HUD")) {
 					
+					ImGui::Checkbox("Ammo Circle", &G::S.ammoCircle);
+					ImGui::SliderFloat("Circle Size", &G::S.ammoCircleSize, 5.f, 100.f, "%.1f px");
+					if (ImGui::BeginMenu("Circle Color")) {
+						ColorPicker(&G::S.ammoCircleColor);
+						ImGui::EndMenu();
+					}
+
 					ImGui::PushID(0);
 					ImGui::SeparatorText("Color Overlay");
 
@@ -1373,7 +1387,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 							ImGui::EndMenu();
 						}
 						ImGui::Checkbox("Render World when flashed", &G::S.anti_flashbang_world_render);
-						ImGui::SliderFloat("Render World Radius", &G::S.anti_flashbang_world_render_radius, 100.f, 1000.f);
+						ImGui::SliderFloat("Render World Radius", &G::S.anti_flashbang_world_render_radius, 100.f, 1000.f, "%.0fu");
 
 						ImGui::TextColored(ImColor(255, 0, 0), "NOTICE");
 						ImGui::SameLine();
@@ -1401,8 +1415,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					
 						ImGui::SliderFloat("Gradient Speed", &G::S.spotify_module_gradient_speed, 0.f, 10.f);
 
-						ImGui::SliderFloat("X", &G::S.spotify_module_pos.x, 0, G::windowSize.x);
-						ImGui::SliderFloat("Y", &G::S.spotify_module_pos.y, 0, G::windowSize.y);
+						ImGui::SliderFloat("X", &G::S.spotify_module_pos.x, 0, G::windowSize.x, "%.1f px");
+						ImGui::SliderFloat("Y", &G::S.spotify_module_pos.y, 0, G::windowSize.y, "%.1f px");
 
 						ImGui::SliderFloat("Font Size", &G::S.spotify_module_font_size, 5.f, 50.f, "%.0fpt");
 						ImGui::SliderFloat("Border Rounding", &G::S.spotify_module_rounding, 0.f, 50.f, "%.1fpx");
@@ -1433,8 +1447,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 						ImGui::Checkbox("Also Display VisTickspeed", &G::S.fps_module_vistickspeed);
 						ImGui::SliderFloat("Gradient Speed", &G::S.fps_module_gradient_speed, 0.f, 10.f);
 
-						ImGui::SliderFloat("X", &G::S.fps_module_pos.x, 0, G::windowSize.x);
-						ImGui::SliderFloat("Y", &G::S.fps_module_pos.y, 0, G::windowSize.y);
+						ImGui::SliderFloat("X", &G::S.fps_module_pos.x, 0, G::windowSize.x, "%.1f px");
+						ImGui::SliderFloat("Y", &G::S.fps_module_pos.y, 0, G::windowSize.y, "%.1f px");
 
 						ImGui::SliderFloat("Font Size", &G::S.fps_module_font_size, 5.f, 50.f, "%.0fpt");
 						ImGui::SliderFloat("Border Rounding", &G::S.fps_module_rounding, 0.f, 50.f, "%.1fpx");
@@ -1469,8 +1483,8 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 
 						ImGui::SliderFloat("Gradient Speed", &G::S.custom_text_module_gradient_speed, 0.f, 10.f);
 
-						ImGui::SliderFloat("X", &G::S.custom_text_module_pos.x, 0, G::windowSize.x);
-						ImGui::SliderFloat("Y", &G::S.custom_text_module_pos.y, 0, G::windowSize.y);
+						ImGui::SliderFloat("X", &G::S.custom_text_module_pos.x, 0, G::windowSize.x, "%.1f px");
+						ImGui::SliderFloat("Y", &G::S.custom_text_module_pos.y, 0, G::windowSize.y, "%.1f px");
 
 						ImGui::SliderFloat("Font Size", &G::S.custom_text_module_font_size, 5.f, 50.f, "%.0fpt");
 						ImGui::SliderFloat("Border Rounding", &G::S.custom_text_module_rounding, 0.f, 50.f, "%.1fpx");
@@ -1505,7 +1519,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					if (!G::S.vsync) {
 						ImGui::SliderInt("max FPS", &G::S.frame_cap, 30, 1000, "%d FPS");
 						if (ImGui::IsItemEdited()) {
-							nextFrameTime = NOW;
+							nextFrameTime = MD_NOW;
 						}
 					}
 
@@ -1528,8 +1542,6 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 							Modular::SetTickCap(G::S.tick_cap);
 						}
 					}
-
-					ImGui::SliderFloat("Radar Constant", &G::radarConstant, 5.f, 10.f);
 
 					ImGui::EndTabItem();
 				}
@@ -1628,9 +1640,9 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					ImGui::SeparatorText("Edit UI Settings");
 
 					ImGui::Checkbox("Fancy Title", &G::S.fancy_title);
-					ImGui::SliderInt("Font Size", &G::T.menu_fontSize, 5, 50, "%dpt");
-					ImGui::SliderFloat("Frame Rounding", &G::T.menu_frameRounding, 0.f, 20.f);
-					ImGui::SliderFloat("Window Rounding", &G::T.menu_windowRounding, 0.f, 20.f);
+					ImGui::SliderInt("Font Size", &G::T.menu_fontSize, 5, 50, "%d pt");
+					ImGui::SliderFloat("Frame Rounding", &G::T.menu_frameRounding, 0.f, 20.f, "%.1f px");
+					ImGui::SliderFloat("Window Rounding", &G::T.menu_windowRounding, 0.f, 20.f, "%.1f px");
 
 					ImGui::SeparatorText("Edit Colors");
 
@@ -1826,6 +1838,16 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
 					INFO_IMPL(
 						"Triggerbot",
 						"This option, when enabled, shoots when aiming with Aimbot and looking at an enemy. It shoots in custom defined intervals that are different for every weapon, so that it basically one-taps."
+					);
+
+					INFO_IMPL(
+						"Triggerbot > Default Shoot Pause",
+						"The default pause between shots if no weapon specific pause delay is given, but I've tested most weapons and defined their delay accordingly. This is mostly for shotguns for example."
+					);
+
+					INFO_IMPL(
+						"Triggerbot > Delay",
+						"The delay between 'Crosshair on Enemy' and 'Mouse-Click'. A too small delay can shoot when not properly aimed and a too large delay might shoot to late."
 					);
 
 					INFO_IMPL(
