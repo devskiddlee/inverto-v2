@@ -1,3 +1,8 @@
+# Archived as of July 5th 2026
+inverto was a side project to learn more about c++
+<br>the different code qualities and styles throughout the codebase caught up and I am no longer interested in maintaining it
+<br>look forward to future projects
+# 
 ![demo pic](https://github.com/devskiddlee/inverto-v2/blob/main/demo/inverto.png)
 
 <p align="center">
